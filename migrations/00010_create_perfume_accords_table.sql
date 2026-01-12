@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS perfume_accords (
     PRIMARY KEY (perfume_id, accord_id, position)
 );
 
-CREATE INDEX idx_perfume_accords_perfume_id ON perfume_accords(perfume_id);
-CREATE INDEX idx_perfume_accords_accord_id ON perfume_accords(accord_id);
+CREATE INDEX IF NOT EXISTS idx_perfume_accords_perfume_id ON perfume_accords(perfume_id);
+CREATE INDEX IF NOT EXISTS idx_perfume_accords_accord_id ON perfume_accords(accord_id);
 -- +goose StatementEnd
 
 -- +goose Down
