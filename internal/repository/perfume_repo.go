@@ -284,6 +284,11 @@ func (r *PerfumeRepo) GetSimilar(ctx context.Context, perfumeID int64, limit int
 		WHERE perfume_id = $1 AND rec_embedding IS NOT NULL
 	`, perfumeID).Scan(&embeddingStr)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			// Perfume doesn't have embeddings yet - return empty result
+			r.logger.Warn("Perfume has no embedding for similar search", zap.Int64("perfumeID", perfumeID))
+			return []domain.PerfumeWithEmbedding{}, nil
+		}
 		return nil, fmt.Errorf("failed to get perfume rec_embedding: %w", err)
 	}
 

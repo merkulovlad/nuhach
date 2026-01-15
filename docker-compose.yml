@@ -93,12 +93,24 @@ services:
       - CSV_PATH=/app/data/processed/dataset_final.csv
     command: ["python", "scripts/03_ingest_normalized.py", "--csv", "/app/data/processed/dataset_final.csv"]
 
+  ingest-embeddings:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingest
+    depends_on:
+      ingest:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - PARQUET_PATH=/app/data/processed/perfumes_with_embeddings.parquet
+    command: ["python", "scripts/04_ingest_embeddings.py", "--truncate"]
+
   indexer:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      ingest:
+      ingest-embeddings:
         condition: service_completed_successfully
     environment:
       - DB_HOST=postgres

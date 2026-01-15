@@ -62,6 +62,16 @@ async def main() -> None:
     # Set vector search enabled/disabled
     set_vector_search_enabled(config.enable_vector_search)
     
+    # Pre-load embedding model if vector search is enabled
+    if config.enable_vector_search:
+        logger.info("Pre-loading embedding model (this may take a while on first run)...")
+        from bot.embedding import preload_model
+        if preload_model():
+            logger.info("✅ Embedding model ready")
+        else:
+            logger.warning("⚠️ Failed to load embedding model - disabling vector search")
+            set_vector_search_enabled(False)
+    
     # Initialize bot and dispatcher
     bot = Bot(
         token=config.bot_token,

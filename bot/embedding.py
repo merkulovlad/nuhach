@@ -30,6 +30,19 @@ def _get_model():
     return _model
 
 
+def preload_model() -> bool:
+    """Pre-load the embedding model during startup.
+    
+    Returns:
+        True if model loaded successfully, False otherwise.
+    """
+    try:
+        _get_model()
+        return True
+    except Exception:
+        return False
+
+
 def embed_query(query: str) -> Optional[List[float]]:
     """
     Embed a search query using multilingual-e5-base.

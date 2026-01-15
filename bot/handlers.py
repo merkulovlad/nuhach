@@ -77,18 +77,31 @@ def get_tg_id(message_or_callback) -> int:
 async def cmd_start(message: Message) -> None:
     """Handle /start command."""
     welcome_text = """
-<b>Welcome to Nuhach Perfume Bot! 🌸</b>
+<b>Добро пожаловать в Nuhach Perfume Bot 👃</b>
 
-I can help you discover amazing perfumes.
+Я не сомелье и не парфюмерный бог.
+Я — нюхач.
+Понюхал, прикинул, сказал как есть.
 
-<b>Available commands:</b>
-/search &lt;query&gt; - Search for perfumes
-/recommend - Get personalized recommendations
-/saves - View your saved perfumes
-/help - Show this help message
+Могу подсказать аромат,
+могу отговорить от херни,
+могу просто поныть, что раньше трава была пахучее.
 
-<b>Example:</b>
-<code>/search rose vanilla</code>
+<b>Чё тут есть:</b>
+
+/search &lt;запрос&gt; — ищем духи, если ты хоть что-то помнишь
+
+/recommend — скажу, что взять, если сам не знаешь чего хочешь
+
+/saves — твои отложенные пузырьки
+
+/help — если всё пошло по пизде и ты забыл команды
+
+Гарантий ноль.
+Вкусы — субъективные.
+Советы — как от знакомого во дворе.
+
+Ну чё, давай нюхать 👃
 """
     await message.answer(welcome_text, parse_mode=ParseMode.HTML)
 

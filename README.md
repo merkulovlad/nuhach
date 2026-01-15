@@ -1,114 +1,163 @@
-# Nuhach Perfume API
+# Nuhach - Telegram Perfume Bot 👃
 
-Go 1.24 backend for perfume search and recommendations using Clean Architecture.
+Telegram bot for perfume recommendations powered by hybrid search (BM25 + embeddings) and personalized recommendations.
 
 ## Features
 
-- **Search**: BM25 multi-match search with field boosts using OpenSearch
-- **Recommendations**: Personalized recommendations with Bayesian weighted rating and epsilon-greedy exploration
-- **Similar Perfumes**: pgvector kNN similarity search
-- **User Events**: Track interactions (impressions, clicks, likes, dislikes, saves)
-- **Analytics**: Daily metrics computation (CTR, Precision@K, Coverage, Novelty)
-
-## Architecture
-
-```
-internal/
-├── domain/          # Entities and repository interfaces
-├── usecase/         # Business logic
-├── repository/      # Data access implementations
-├── transport/http/  # Fiber HTTP handlers
-└── infra/           # Config, DB, OpenSearch clients
-```
+- **Hybrid Search**: Combines OpenSearch BM25 with pgvector semantic search (multilingual-e5-base embeddings)
+- **Personalized Recommendations**: Bayesian weighted ratings + epsilon-greedy exploration
+- **Similar Perfumes**: Item-to-item similarity using rec_embedding (paraphrase-multilingual-mpnet)
+- **User Tracking**: Impressions, clicks, likes, dislikes, saves
+- **24,063 Perfumes** with Russian translations for notes/accords
 
 ## Quick Start
 
 ```bash
-# Start everything with one command (postgres, opensearch, api, ingest, indexer, telegram bot)
+# 1. Set up environment
+cp .env.example .env
+# Add your BOT_API_KEY to .env
+
+# 2. Start everything with one command
 docker compose up -d
 
-# View logs
-docker compose logs -f
-
-# View specific service logs
+# 3. View logs
 docker compose logs -f bot
 docker compose logs -f api
 ```
 
-### Startup Order
+**⏱️ First Startup**: Takes 3-5 minutes (embeddings ingestion + model download)  
+**🚀 Subsequent Restarts**: <30 seconds
 
-The services start automatically in the correct order:
+That's it! The bot is now running and connected to Telegram.
 
-1. **postgres** + **opensearch** - Start and wait for health checks
-2. **migrate** - Run database migrations
-3. **api** - Start the API server (waits for health check)
-4. **ingest** - Load data from CSV into PostgreSQL
-5. **indexer** - Build OpenSearch index from PostgreSQL data
-6. **bot** - Start Telegram bot (connects to API)
+### What Happens on Startup
 
-### Stop Everything
+Services start automatically in order:
 
-```bash
-docker compose down        # Stop containers
-docker compose down -v     # Stop and remove volumes (fresh start)
+1. **PostgreSQL** + **OpenSearch** - Databases start and health checks pass
+2. **Migrate** - Database migrations run
+3. **API** - Go backend starts (Fiber HTTP server)
+4. **Ingest** - Loads 24,063 perfumes from CSV into PostgreSQL
+5. **Ingest Embeddings** - Loads search + rec embeddings (768-dim vectors) into perfume_search table
+6. **Indexer** - Builds OpenSearch BM25 index from PostgreSQL data
+7. **Bot** - Telegram bot starts (downloads multilingual-e5-base model on first run)
+
+### Why First Startup is Slow
+
+**Embedding Ingestion** (~2-3 minutes):
+- Loads 584MB parquet file with 24,063 perfumes
+- Each perfume has 2 embeddings × 768 dimensions = ~1.5M floats
+- Inserts into PostgreSQL with pgvector indexing
+
+**Model Download** (~1-2 minutes):
+- Bot downloads `intfloat/multilingual-e5-base` (~500MB) from HuggingFace
+- Cached in container after first download
+- Pre-loads model before accepting requests (no hanging on first search)
+
+**Subsequent Restarts**: Only services restart, data persists in Docker volumes.
+
+## Bot Commands
+
 ```
+/start      - Welcome message
+/search <query> - Search perfumes (e.g., /search роза ваниль)
+/recommend  - Get personalized recommendations
+/saves      - View saved perfumes
+/help       - Show commands
+```
+
+### Search Examples
+
+```
+/search версаче версенс   - Finds Versace perfumes (hybrid Russian/English search)
+/search tom ford oud      - Searches by brand + note
+/search цветочный сладкий - Searches by accords in Russian
+```
+
+## Architecture
+
+```
+├── bot/                    # Python Telegram bot (aiogram v3)
+│   ├── main.py            # Bot entry point
+│   ├── handlers.py        # Command & callback handlers
+│   ├── api_client.py      # HTTP client for backend API
+│   ├── embedding.py       # multilingual-e5-base for query embeddings
+│   ├── formatters.py      # Message formatting
+│   └── keyboards.py       # Inline keyboards
+│
+├── cmd/
+│   ├── api/               # Go HTTP API server (Fiber)
+│   ├── indexer/           # OpenSearch indexer
+│   └── analytics/         # Daily metrics computation
+│
+├── internal/
+│   ├── domain/            # Entities & repository interfaces
+│   ├── usecase/           # Business logic
+│   │   ├── search.go      # Hybrid search with RRF fusion
+│   │   └── recommendations.go  # Personalized recs
+│   ├── repository/        # PostgreSQL + OpenSearch + pgvector
+│   └── transport/http/    # Fiber HTTP handlers
+│
+├── migrations/            # PostgreSQL migrations (pgvector, tables, indexes)
+├── scripts/               # Data ingestion scripts
+│   ├── 03_ingest_normalized.py   # Load perfumes from CSV
+│   └── 04_ingest_embeddings.py  # Load embeddings from parquet
+│
+└── data/
+    └── processed/
+        ├── dataset_final.csv                   # Perfume data with Russian translations
+        └── perfumes_with_embeddings.parquet    # 768-dim embeddings (search + rec)
+```
+
+## Hybrid Search
+
+### How It Works
+
+1. **User sends query**: "версаче версенс" (Russian misspelling)
+2. **Bot generates embedding**: multilingual-e5-base encodes "query: версаче версенс" → 768-dim vector
+3. **API performs hybrid search**:
+   - **Vector search**: pgvector finds 30 nearest neighbors using `embedding <-> query_vector`
+   - **BM25 search**: OpenSearch multi-match on `name^5, brand_en^4, accords_ru^3, notes_ru^2`
+4. **RRF Fusion**: Merges both result lists using Reciprocal Rank Fusion with k=60
+5. **Returns top 10** with Russian notes/accords + English brands
+
+### Embeddings
+
+- **search_embedding** (multilingual-e5-base, 768-dim): Query→document search
+- **rec_embedding** (paraphrase-multilingual-mpnet, 768-dim): Item-to-item similarity
+
+Both stored in `perfume_search` table with pgvector `<->` operator for cosine distance.
 
 ## API Endpoints
 
-### Health Check
+### Search (Hybrid)
 ```http
-GET /api/health
-```
+POST /api/search/vector
+Content-Type: application/json
 
-### Search
-```http
-GET /api/search?q=роза&limit=20&offset=0&tg_id=123456
-```
-
-Query parameters:
-- `q` (required): Search query
-- `limit` (optional, default: 20, max: 100): Results per page
-- `offset` (optional, default: 0): Pagination offset
-- `tg_id` (optional): Telegram user ID for impression logging
-
-Response:
-```json
 {
-  "items": [
-    {
-      "id": 1,
-      "name": "Perfume Name",
-      "brand": "Brand",
-      "rating_value": 4.5,
-      "rating_count": 100,
-      "year": 2020,
-      "notes": "rose, jasmine",
-      "accords": "floral, fresh"
-    }
-  ],
-  "request_id": "uuid",
-  "total": 150
+  "query": "роза ваниль",
+  "embedding": [0.023, -0.041, ...],  // 768-dim vector
+  "limit": 10,
+  "tg_id": 123456
 }
 ```
 
-### Get Perfume Details
-```http
-GET /api/perfumes/:id
-```
-
-### Get Similar Perfumes
-```http
-GET /api/perfumes/:id/similar?limit=10&tg_id=123456
-```
-
-### Get Recommendations
+### Recommendations
 ```http
 GET /api/users/:tg_id/recommendations?limit=20
 ```
 
-Response includes `exploration_ids` array indicating which items were from exploration (epsilon-greedy).
+Returns personalized items with `exploration_ids` array (epsilon-greedy).
 
-### Create Event
+### Similar Perfumes
+```http
+GET /api/perfumes/:id/similar?limit=10
+```
+
+Uses `rec_embedding` for item-to-item kNN.
+
+### Event Tracking
 ```http
 POST /api/users/:tg_id/events
 Content-Type: application/json
@@ -116,145 +165,132 @@ Content-Type: application/json
 {
   "perfume_id": 123,
   "event_type": "like",
-  "rating": 5,
-  "request_id": "uuid-from-search"
+  "request_id": "uuid"
 }
 ```
 
-Event types: `impression`, `click`, `like`, `dislike`, `save`, `my_saves`
-
-### Get User Saves
-```http
-GET /api/users/:tg_id/saves
-```
+Event types: `impression`, `click`, `like`, `dislike`, `save`
 
 ## Configuration
 
-Uses existing environment variables from `.env`:
+All config in `.env`:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| DB_HOST | PostgreSQL host | localhost |
-| DB_PORT | PostgreSQL port | 5432 |
-| DB_NAME | Database name | nuhach |
-| DB_USER | Database user | admin |
-| DB_PASSWORD | Database password | - |
-| OPENSEARCH_HOST | OpenSearch host | localhost |
-| OPENSEARCH_PORT | OpenSearch port | 9200 |
-| OPENSEARCH_INDEX | Index name | perfumes |
-| SERVER_PORT | API server port | 8080 |
+```env
+# Telegram Bot
+BOT_API_KEY=your_telegram_bot_token
 
-## Recommendation Algorithm
+# Database (PostgreSQL)
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=nuhach
+DB_USER=admin
+DB_PASSWORD=securepassword123
+
+# OpenSearch
+OPENSEARCH_HOST=opensearch
+OPENSEARCH_PORT=9200
+OPENSEARCH_INDEX=perfumes
+
+# API
+SERVER_PORT=8080
+```
+
+## Recommendations Algorithm
 
 ### Bayesian Weighted Rating
 $$wr = \frac{v}{v+m} \cdot R + \frac{m}{v+m} \cdot C$$
 
 Where:
-- $v$ = rating_count
-- $R$ = rating_value
+- $v$ = rating_count (number of votes)
+- $R$ = rating_value (average rating)  
 - $m$ = threshold (default: 10)
-- $C$ = global mean rating
+- $C$ = global mean rating (~3.8)
 
-### Scoring Formula
-```
-final_score = 0.7 * similarity + 0.3 * normalized_weighted_rating
+### Scoring
+```go
+similarity := cosineSimilarity(user_embedding, perfume_embedding)
+normalized_rating := bayesian_rating / 5.0
+final_score := 0.7 * similarity + 0.3 * normalized_rating
 ```
 
 ### Exploration
-Epsilon-greedy with 5% exploration rate.
-
-## Analytics Metrics
-
-- **CTR**: Click-through rate
-- **Precision@K**: Fraction of shown items that were liked
-- **Coverage**: Unique items shown / total catalog
-- **Novelty**: Inverse log popularity of shown items
-
----
-
-## Telegram Bot
-
-A Python Telegram bot is available in the `bot/` directory.
-
-### Bot Features
-
-- **Search**: `/search <query>` - Search perfumes by name, notes, or brand
-- **Recommendations**: `/recommend` - Get personalized recommendations
-- **Saves**: `/saves` - View saved perfumes
-- **Inline buttons**: Details, Similar, Like, Dislike, Save
-
-### Bot Environment Variables
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `BOT_API_KEY` | Telegram bot token | **Yes** | - |
-| `API_BASE_URL` | Backend API URL | No | `http://localhost:8080` |
-| `BOT_REQUEST_TIMEOUT` | API request timeout (seconds) | No | `10.0` |
-| `BOT_MAX_RETRIES` | Max API retry attempts | No | `3` |
-| `BOT_RETRY_DELAY` | Delay between retries (seconds) | No | `0.5` |
-
-### Running the Bot
-
-```bash
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Ensure .env has BOT_API_KEY set
-# Ensure the API service is running (docker compose up -d api)
-
-# Run the bot
-python -m bot.main
-```
-
-### Bot Sample Commands
-
-```
-/start          - Show welcome message and commands
-/help           - Show help message
-/search rose    - Search for perfumes with "rose"
-/search vanilla noir - Search for "vanilla noir"
-/recommend      - Get personalized recommendations
-/saves          - View your saved perfumes
-```
-
-### Bot Testing
-
-```bash
-# Run bot tests
-pytest bot/tests/ -v
-```
-
----
+Epsilon-greedy with 5% exploration rate - occasionally shows random perfumes to avoid filter bubbles.
 
 ## Development
 
-```bash
-# Install dependencies
-go mod tidy
+### Prerequisites
+- Docker & Docker Compose
+- Python 3.12+ (for local bot development)
+- Go 1.24+ (for API development)
 
-# Run tests
-go test ./...
+### Local Development
+
+```bash
+# Start only databases
+docker compose up -d postgres opensearch
 
 # Run API locally
 go run ./cmd/api
 
-# Run indexer
-go run ./cmd/indexer -recreate
-
-# Run analytics
-go run ./cmd/analytics
+# Run bot locally (after pip install -r requirements.txt)
+export BOT_API_KEY=your_token
+export API_BASE_URL=http://localhost:8080
+python -m bot.main
 ```
 
-## Make Targets
+### Database Access
 
 ```bash
-make build          # Build all binaries
-make test           # Run tests
-make test-coverage  # Run tests with coverage
-make docker-up      # Start all services
-make docker-down    # Stop all services
-make migrate        # Run database migrations
-make index          # Run OpenSearch indexer
-make analytics      # Run analytics computation
+# PostgreSQL
+docker compose exec postgres psql -U admin -d nuhach
+
+# Check embeddings
+SELECT COUNT(*) FROM perfume_search WHERE embedding IS NOT NULL;
+
+# OpenSearch
+curl http://localhost:9200/perfumes/_search?pretty
 ```
+
+### Useful Commands
+
+```bash
+# View specific service logs
+docker compose logs -f bot
+docker compose logs -f api
+
+# Restart service
+docker compose restart bot
+
+# Rebuild after code changes
+docker compose build bot && docker compose up -d bot
+docker compose build api && docker compose up -d api
+
+# Fresh start (deletes all data)
+docker compose down -v && docker compose up -d
+```
+
+## Makefile Commands
+
+```bash
+make up       # Start all services
+make down     # Stop all services  
+make logs     # View all logs
+make restart  # Restart all services
+```
+
+## Tech Stack
+
+- **Bot**: Python 3.12, aiogram 3.4, sentence-transformers, torch
+- **API**: Go 1.24, Fiber, pgx (PostgreSQL driver)
+- **Search**: OpenSearch 2.12 (BM25), pgvector (cosine similarity)
+- **Embeddings**: multilingual-e5-base (search), paraphrase-multilingual-mpnet (recommendations)
+- **Database**: PostgreSQL 16 with pgvector extension
+- **Deployment**: Docker Compose
+
+## Data
+
+- **24,063 perfumes** from Fragrantica
+- Russian translations for notes, accords, brands
+- Pre-computed embeddings in `data/processed/perfumes_with_embeddings.parquet` (584MB)
+
 
