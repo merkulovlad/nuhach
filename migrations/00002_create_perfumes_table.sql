@@ -20,6 +20,18 @@ CREATE TABLE IF NOT EXISTS perfumes (
     main_accord3 TEXT,
     main_accord4 TEXT,
     main_accord5 TEXT,
+    -- Russian translations
+    brand_ru TEXT,
+    country_ru TEXT,
+    gender_ru TEXT,
+    top_notes_ru TEXT,
+    middle_notes_ru TEXT,
+    base_notes_ru TEXT,
+    main_accord1_ru TEXT,
+    main_accord2_ru TEXT,
+    main_accord3_ru TEXT,
+    main_accord4_ru TEXT,
+    main_accord5_ru TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

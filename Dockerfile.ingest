@@ -1,0 +1,24 @@
+# Data Ingestion Dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir pandas pyarrow psycopg[binary] python-dotenv opensearch-py
+
+# Copy scripts and data
+COPY scripts/ ./scripts/
+COPY data/ ./data/
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Default command - run ingest script
+CMD ["python", "scripts/03_ingest_normalized.py", "--csv", "data/processed/dataset_final.csv"]
