@@ -1,6 +1,6 @@
 module nuhach
 
-go 1.23
+go 1.25.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.5
@@ -8,6 +8,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/lib/pq v1.10.9
 	github.com/opensearch-project/opensearch-go/v2 v2.3.0
+	github.com/pgvector/pgvector-go v0.4.0
 	go.uber.org/zap v1.27.0
 )
 

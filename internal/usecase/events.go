@@ -69,9 +69,11 @@ func (uc *EventUseCase) CreateEvent(ctx context.Context, req CreateEventRequest)
 		return err
 	}
 
-	// Update user embedding on positive feedback
-	if req.EventType == domain.EventLike || req.EventType == domain.EventSave {
-		if err := uc.updateUserEmbedding(ctx, user.ID, req.PerfumeID, req.Rating); err != nil {
+	// Move the user embedding by a signed weight per event type.
+	// Likes/saves pull the centroid toward the item; dislikes push it away;
+	// clicks are a weak positive signal (intent without commitment).
+	if w := eventEmbeddingWeight(req.EventType, req.Rating); w != 0 {
+		if err := uc.updateUserEmbedding(ctx, user.ID, req.PerfumeID, w); err != nil {
 			uc.logger.Warn("failed to update user embedding", zap.Error(err))
 		}
 	}
@@ -79,9 +81,31 @@ func (uc *EventUseCase) CreateEvent(ctx context.Context, req CreateEventRequest)
 	return nil
 }
 
-// updateUserEmbedding updates the user's embedding incrementally.
-func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfumeID int64, rating *int) error {
-	// Get perfume embedding
+// eventEmbeddingWeight returns the signed weight applied to the perfume
+// embedding when folding it into the user centroid. Returns 0 when the event
+// type should not move the embedding (impression, my_saves, ...).
+func eventEmbeddingWeight(t domain.EventType, rating *int) float64 {
+	switch t {
+	case domain.EventLike:
+		if rating != nil {
+			return float64(*rating) / 5.0
+		}
+		return 1.0
+	case domain.EventSave:
+		return 1.0
+	case domain.EventClick:
+		return 0.15
+	case domain.EventDislike:
+		return -0.4
+	default:
+		return 0
+	}
+}
+
+// updateUserEmbedding folds a perfume embedding into the user centroid
+// with a signed weight. Positive weights pull the centroid toward the
+// item (like/save/click); negative weights push it away (dislike).
+func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfumeID int64, weight float64) error {
 	perfumeEmb, err := uc.perfumeRepo.GetEmbeddingByPerfumeID(ctx, perfumeID)
 	if err != nil {
 		return err
@@ -91,24 +115,21 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 		return nil
 	}
 
-	// Get current user embedding
 	userEmb, err := uc.userEmbeddingRepo.Get(ctx, userID)
 	if err != nil {
 		return err
 	}
 
-	// Compute weight based on rating (default weight = 1.0 for likes)
-	weight := 1.0
-	if rating != nil {
-		weight = float64(*rating) / 5.0 // Normalize rating to 0-1 weight
-	}
-
+	// Cold start: only seed from a positive signal. A first interaction
+	// being a dislike would orient the user vector backwards from a
+	// disliked item, which is worse than no vector at all.
 	if userEmb == nil || len(userEmb.Embedding) == 0 {
-		// Initialize user embedding with perfume embedding
+		if weight <= 0 {
+			return nil
+		}
 		newEmb := make([]float32, len(perfumeEmb))
 		copy(newEmb, perfumeEmb)
 		normalizeEmbedding(newEmb)
-
 		return uc.userEmbeddingRepo.Upsert(ctx, &domain.UserEmbedding{
 			UserID:        userID,
 			Embedding:     newEmb,
@@ -117,17 +138,7 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 		})
 	}
 
-	// Incremental update with weighted running mean
-	// new_emb = (old_emb * n + perfume_emb * weight) / (n + weight)
-	// This gives more weight to items with higher ratings
-	n := float64(userEmb.NInteractions)
-	newEmb := make([]float32, len(userEmb.Embedding))
-	for i := 0; i < len(newEmb); i++ {
-		newEmb[i] = float32((float64(userEmb.Embedding[i])*n + float64(perfumeEmb[i])*weight) / (n + weight))
-	}
-
-	// Normalize the embedding
-	normalizeEmbedding(newEmb)
+	newEmb := mergeEmbedding(userEmb.Embedding, userEmb.NInteractions, perfumeEmb, weight)
 
 	return uc.userEmbeddingRepo.Upsert(ctx, &domain.UserEmbedding{
 		UserID:        userID,
@@ -135,6 +146,31 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 		NInteractions: userEmb.NInteractions + 1,
 		Version:       userEmb.Version + 1,
 	})
+}
+
+// mergeEmbedding folds a perfume vector into a user centroid using a
+// weighted running mean. Denominator uses |weight| so n+|w| stays
+// positive on dislikes; numerator carries the sign so the centroid
+// drifts toward (or away from) the item. The result is L2-normalized.
+func mergeEmbedding(user []float32, n int, perfume []float32, weight float64) []float32 {
+	out := make([]float32, len(user))
+	nf := float64(n)
+	denom := nf + math.Abs(weight)
+	for i := range out {
+		out[i] = float32((float64(user[i])*nf + float64(perfume[i])*weight) / denom)
+	}
+	normalizeEmbedding(out)
+	return out
+}
+
+// MergeEmbedding exports mergeEmbedding for testing.
+func MergeEmbedding(user []float32, n int, perfume []float32, weight float64) []float32 {
+	return mergeEmbedding(user, n, perfume, weight)
+}
+
+// EventEmbeddingWeight exports eventEmbeddingWeight for testing.
+func EventEmbeddingWeight(t domain.EventType, rating *int) float64 {
+	return eventEmbeddingWeight(t, rating)
 }
 
 // normalizeEmbedding normalizes an embedding vector to unit length.

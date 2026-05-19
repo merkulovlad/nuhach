@@ -4,12 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"nuhach/internal/domain"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 	"go.uber.org/zap"
 )
 
@@ -28,13 +27,13 @@ func NewUserEmbeddingRepo(db *sql.DB, logger *zap.Logger, embeddingDim int) *Use
 // Get retrieves the user embedding.
 func (r *UserEmbeddingRepo) Get(ctx context.Context, userID int64) (*domain.UserEmbedding, error) {
 	var emb domain.UserEmbedding
-	var embJSON []byte
+	var vec pgvector.Vector
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, embedding::text, n_interactions, version, created_at, updated_at
+		SELECT id, user_id, embedding, n_interactions, version, created_at, updated_at
 		FROM user_embeddings
 		WHERE user_id = $1
-	`, userID).Scan(&emb.ID, &emb.UserID, &embJSON, &emb.NInteractions, &emb.Version, &emb.CreatedAt, &emb.UpdatedAt)
+	`, userID).Scan(&emb.ID, &emb.UserID, &vec, &emb.NInteractions, &emb.Version, &emb.CreatedAt, &emb.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -42,14 +41,9 @@ func (r *UserEmbeddingRepo) Get(ctx context.Context, userID int64) (*domain.User
 		return nil, fmt.Errorf("failed to get user embedding: %w", err)
 	}
 
-	// Parse embedding from PostgreSQL vector format
-	embStr := strings.Trim(string(embJSON), "[]")
-	parts := strings.Split(embStr, ",")
-	emb.Embedding = make([]float32, len(parts))
-	for i, p := range parts {
-		var f float64
-		fmt.Sscanf(strings.TrimSpace(p), "%f", &f)
-		emb.Embedding[i] = float32(f)
+	emb.Embedding = vec.Slice()
+	if len(emb.Embedding) != r.embeddingDim {
+		return nil, fmt.Errorf("user embedding dim mismatch: got %d, want %d", len(emb.Embedding), r.embeddingDim)
 	}
 
 	return &emb, nil
@@ -57,29 +51,23 @@ func (r *UserEmbeddingRepo) Get(ctx context.Context, userID int64) (*domain.User
 
 // Upsert creates or updates the user embedding.
 func (r *UserEmbeddingRepo) Upsert(ctx context.Context, emb *domain.UserEmbedding) error {
-	// Build embedding string for PostgreSQL vector
-	embParts := make([]string, len(emb.Embedding))
-	for i, v := range emb.Embedding {
-		embParts[i] = fmt.Sprintf("%f", v)
+	if len(emb.Embedding) != r.embeddingDim {
+		return fmt.Errorf("upsert embedding dim mismatch: got %d, want %d", len(emb.Embedding), r.embeddingDim)
 	}
-	embStr := "[" + strings.Join(embParts, ",") + "]"
 
 	now := time.Now()
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO user_embeddings (user_id, embedding, n_interactions, version, created_at, updated_at)
-		VALUES ($1, $2::vector, $3, $4, $5, $5)
+		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (user_id) DO UPDATE SET
-			embedding = $2::vector,
-			n_interactions = $3,
+			embedding = EXCLUDED.embedding,
+			n_interactions = EXCLUDED.n_interactions,
 			version = user_embeddings.version + 1,
-			updated_at = $5
-	`, emb.UserID, embStr, emb.NInteractions, emb.Version, now)
+			updated_at = EXCLUDED.updated_at
+	`, emb.UserID, pgvector.NewVector(emb.Embedding), emb.NInteractions, emb.Version, now)
 	if err != nil {
 		return fmt.Errorf("failed to upsert user embedding: %w", err)
 	}
 
 	return nil
 }
-
-// Ensure pgtype is used (for future use)
-var _ pgtype.Text

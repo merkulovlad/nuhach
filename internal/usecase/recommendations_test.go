@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"nuhach/internal/domain"
 	"nuhach/internal/usecase"
 )
 
@@ -216,6 +217,96 @@ func TestNormalizeEmbedding_ZeroVector(t *testing.T) {
 		if v != 0 {
 			t.Errorf("NormalizeEmbedding() on zero vector[%d] = %v, want 0", i, v)
 		}
+	}
+}
+
+func TestEventEmbeddingWeight(t *testing.T) {
+	tests := []struct {
+		name   string
+		event  domain.EventType
+		rating *int
+		want   float64
+	}{
+		{"like without rating", domain.EventLike, nil, 1.0},
+		{"like with rating 5", domain.EventLike, intPtr(5), 1.0},
+		{"like with rating 3", domain.EventLike, intPtr(3), 0.6},
+		{"save", domain.EventSave, nil, 1.0},
+		{"click", domain.EventClick, nil, 0.15},
+		{"dislike pushes away", domain.EventDislike, nil, -0.4},
+		{"impression is neutral", domain.EventImpression, nil, 0},
+		{"my_saves is neutral", domain.EventMySaves, nil, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := usecase.EventEmbeddingWeight(tt.event, tt.rating)
+			if math.Abs(got-tt.want) > 1e-9 {
+				t.Errorf("EventEmbeddingWeight(%s) = %v, want %v", tt.event, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeEmbedding_PositiveWeightPullsToward(t *testing.T) {
+	// User vector points along +X; new item points along +Y with weight 1.
+	// Centroid should rotate from (1,0) toward (1,1)/sqrt(2).
+	user := []float32{1, 0}
+	item := []float32{0, 1}
+
+	got := usecase.MergeEmbedding(user, 1, item, 1.0)
+
+	if got[1] <= 0 {
+		t.Errorf("expected positive y-component after positive-weight merge, got %v", got)
+	}
+	if got[0] <= 0 {
+		t.Errorf("expected positive x-component preserved, got %v", got)
+	}
+	// Result must be unit length.
+	norm := math.Sqrt(float64(got[0]*got[0] + got[1]*got[1]))
+	if math.Abs(norm-1.0) > 1e-5 {
+		t.Errorf("result not normalized, |v|=%v", norm)
+	}
+}
+
+func TestMergeEmbedding_NegativeWeightPushesAway(t *testing.T) {
+	// User along +X. Disliked item also along +Y. After dislike the
+	// centroid's y-component must be negative (moved away from +Y).
+	user := []float32{1, 0}
+	item := []float32{0, 1}
+
+	got := usecase.MergeEmbedding(user, 1, item, -0.4)
+
+	if got[1] >= 0 {
+		t.Errorf("expected y-component to go negative after dislike, got %v", got)
+	}
+}
+
+func TestMergeEmbedding_DenominatorPositiveOnDislike(t *testing.T) {
+	// With n=0 and a negative weight, naive denom (n+weight) would be
+	// negative and the merge would explode. Guard: we divide by n+|w|.
+	user := []float32{1, 0, 0}
+	item := []float32{0, 1, 0}
+
+	got := usecase.MergeEmbedding(user, 0, item, -0.4)
+
+	for i, v := range got {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			t.Fatalf("non-finite value at index %d: %v", i, v)
+		}
+	}
+}
+
+func TestMergeEmbedding_LargeNDampensSingleEvent(t *testing.T) {
+	// With many prior interactions, a single new event should barely
+	// move the centroid. Cosine to the original user vector must stay
+	// close to 1.
+	user := []float32{1, 0, 0}
+	item := []float32{0, 1, 0}
+
+	got := usecase.MergeEmbedding(user, 1000, item, 1.0)
+
+	sim := usecase.CosineSimilarity(user, got)
+	if sim < 0.999 {
+		t.Errorf("single event moved centroid too much with n=1000: cos=%v", sim)
 	}
 }
 

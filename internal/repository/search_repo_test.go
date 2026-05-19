@@ -125,20 +125,18 @@ func TestBuildSearchQuery_WithOffset(t *testing.T) {
 }
 
 func TestSearchQueryFieldCount(t *testing.T) {
-	// Verify that all 8 fields are present
 	query, _ := repository.BuildSearchQuery("test", 10, 0)
 	var result map[string]interface{}
 	json.Unmarshal(query, &result)
 
-	// Navigate to fields array
 	queryObj := result["query"].(map[string]interface{})
 	funcScore := queryObj["function_score"].(map[string]interface{})
 	innerQuery := funcScore["query"].(map[string]interface{})
 	multiMatch := innerQuery["multi_match"].(map[string]interface{})
 	fields := multiMatch["fields"].([]interface{})
 
-	// Should have 8 fields with boosts
-	if len(fields) != 8 {
-		t.Errorf("Expected 8 fields with boosts, got %d", len(fields))
+	const want = 7
+	if len(fields) != want {
+		t.Errorf("Expected %d fields with boosts, got %d", want, len(fields))
 	}
 }

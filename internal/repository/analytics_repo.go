@@ -39,12 +39,19 @@ func (r *AnalyticsRepo) ComputeDailyMetrics(ctx context.Context, date string, su
 		return nil, fmt.Errorf("failed to count impressions: %w", err)
 	}
 
-	// Get clicks count
+	// Clicks must be attributed to a specific impression via request_id and
+	// fall inside an attribution window after the impression. Without
+	// request_id matching, clicks from any surface get counted for every
+	// surface the user touched.
 	err = r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) 
-		FROM user_events 
-		WHERE DATE(created_at) = $1 AND event_type = 'click'
-		AND request_id IN (SELECT request_id FROM impression_logs WHERE surface = $2)
+		SELECT COUNT(*)
+		FROM user_events ue
+		JOIN impression_logs il ON il.request_id = ue.request_id
+		WHERE DATE(il.created_at) = $1
+		  AND il.surface = $2
+		  AND ue.event_type = 'click'
+		  AND ue.created_at >= il.created_at
+		  AND ue.created_at <  il.created_at + INTERVAL '24 hours'
 	`, date, surface).Scan(&metrics.Clicks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count clicks: %w", err)
@@ -55,27 +62,28 @@ func (r *AnalyticsRepo) ComputeDailyMetrics(ctx context.Context, date string, su
 		metrics.CTR = float64(metrics.Clicks) / float64(metrics.Impressions)
 	}
 
-	// Calculate Precision@K (likes among top-K shown)
-	// For each impression, check if any of the shown items were later liked
+	// Precision@K: for each impression, fraction of its top-K shown items
+	// that the same user engaged with (click/like/save) within 24h, joined
+	// strictly by request_id so surfaces don't bleed into each other.
 	err = r.db.QueryRowContext(ctx, `
-		WITH impressions_with_likes AS (
-			SELECT 
+		WITH impressions_with_hits AS (
+			SELECT
 				il.id,
-				il.perfume_ids,
-				COALESCE(
-					(SELECT COUNT(*) FROM user_events ue 
-					 WHERE ue.user_id = il.user_id 
-					 AND ue.event_type = 'like'
-					 AND ue.perfume_id = ANY(il.perfume_ids)
-					 AND ue.created_at >= il.created_at),
-					0
-				) as likes_in_list,
-				array_length(il.perfume_ids, 1) as list_length
+				array_length(il.perfume_ids, 1) AS list_length,
+				COALESCE((
+					SELECT COUNT(DISTINCT ue.perfume_id)
+					FROM user_events ue
+					WHERE ue.request_id = il.request_id
+					  AND ue.event_type IN ('click', 'like', 'save')
+					  AND ue.perfume_id = ANY(il.perfume_ids)
+					  AND ue.created_at >= il.created_at
+					  AND ue.created_at <  il.created_at + INTERVAL '24 hours'
+				), 0) AS hits_in_list
 			FROM impression_logs il
 			WHERE DATE(il.created_at) = $1 AND il.surface = $2
 		)
-		SELECT COALESCE(AVG(CAST(likes_in_list AS FLOAT) / NULLIF(list_length, 0)), 0)
-		FROM impressions_with_likes
+		SELECT COALESCE(AVG(CAST(hits_in_list AS FLOAT) / NULLIF(list_length, 0)), 0)
+		FROM impressions_with_hits
 	`, date, surface).Scan(&metrics.PrecisionK)
 	if err != nil {
 		r.logger.Warn("failed to compute precision@k", zap.Error(err))
