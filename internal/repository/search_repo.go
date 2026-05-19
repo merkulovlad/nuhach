@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"nuhach/internal/domain"
+	"github.com/merkulovlad/nuhach/internal/domain"
 
 	"github.com/opensearch-project/opensearch-go/v2"
 	"go.uber.org/zap"

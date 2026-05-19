@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"nuhach/internal/infra/config"
-	"nuhach/internal/infra/db"
-	"nuhach/internal/infra/logger"
-	"nuhach/internal/repository"
+	"github.com/merkulovlad/nuhach/internal/infra/config"
+	"github.com/merkulovlad/nuhach/internal/infra/db"
+	"github.com/merkulovlad/nuhach/internal/infra/logger"
+	"github.com/merkulovlad/nuhach/internal/repository"
 
 	"go.uber.org/zap"
 )

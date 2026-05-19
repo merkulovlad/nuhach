@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"nuhach/internal/domain"
+	"github.com/merkulovlad/nuhach/internal/domain"
 
 	"go.uber.org/zap"
 )

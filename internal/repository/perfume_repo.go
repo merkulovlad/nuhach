@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"nuhach/internal/domain"
+	"github.com/merkulovlad/nuhach/internal/domain"
 
 	"github.com/lib/pq"
 	"go.uber.org/zap"

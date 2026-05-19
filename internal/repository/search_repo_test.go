@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"nuhach/internal/repository"
+	"github.com/merkulovlad/nuhach/internal/repository"
 )
 
 func TestBuildSearchQuery(t *testing.T) {

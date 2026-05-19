@@ -3,8 +3,8 @@ package http
 import (
 	"strconv"
 
-	"nuhach/internal/domain"
-	"nuhach/internal/usecase"
+	"github.com/merkulovlad/nuhach/internal/domain"
+	"github.com/merkulovlad/nuhach/internal/usecase"
 
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"

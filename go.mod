@@ -1,4 +1,4 @@
-module nuhach
+module github.com/merkulovlad/nuhach
 
 go 1.25.0
 

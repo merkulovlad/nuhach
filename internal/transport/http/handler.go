@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"nuhach/internal/usecase"
+	"github.com/merkulovlad/nuhach/internal/usecase"
 
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"

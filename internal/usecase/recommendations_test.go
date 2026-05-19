@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"nuhach/internal/domain"
-	"nuhach/internal/usecase"
+	"github.com/merkulovlad/nuhach/internal/domain"
+	"github.com/merkulovlad/nuhach/internal/usecase"
 )
 
 func TestComputeWeightedRating_WithValidData(t *testing.T) {

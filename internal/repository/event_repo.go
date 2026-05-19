@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"nuhach/internal/domain"
+	"github.com/merkulovlad/nuhach/internal/domain"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"

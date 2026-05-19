@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"sort"
 
-	"nuhach/internal/domain"
+	"github.com/merkulovlad/nuhach/internal/domain"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
