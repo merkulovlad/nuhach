@@ -1,4 +1,7 @@
-.PHONY: help docker-up docker-down docker-logs
+.PHONY: help docker-up docker-down docker-logs embeddings embeddings-venv
+
+EMBEDDINGS_VENV ?= .venv-embeddings
+EMBEDDINGS_PYTHON := $(EMBEDDINGS_VENV)/bin/python
 
 # Default target
 help:
@@ -9,6 +12,7 @@ help:
 	@echo "  make down     - Stop all services"
 	@echo "  make logs     - View all logs"
 	@echo "  make restart  - Restart all services"
+	@echo "  make embeddings - Generate embeddings parquet"
 	@echo ""
 	@echo "Individual service logs:"
 	@echo "  docker compose logs -f bot"
@@ -35,3 +39,16 @@ logs:
 restart:
 	@echo "Restarting all services..."
 	docker compose restart
+
+# Install isolated Python dependencies for embeddings generation
+embeddings-venv: $(EMBEDDINGS_VENV)/.installed
+
+$(EMBEDDINGS_VENV)/.installed: requirements-embeddings.txt
+	python3 -m venv $(EMBEDDINGS_VENV)
+	$(EMBEDDINGS_PYTHON) -m pip install --upgrade pip
+	$(EMBEDDINGS_PYTHON) -m pip install -r requirements-embeddings.txt
+	touch $(EMBEDDINGS_VENV)/.installed
+
+# Generate embeddings parquet for ingest-embeddings
+embeddings: embeddings-venv
+	$(EMBEDDINGS_PYTHON) scripts/05_create_embeddings.py --force

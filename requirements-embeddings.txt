@@ -1,0 +1,4 @@
+pandas
+pyarrow
+sentence-transformers>=2.2.0
+torch>=2.0.0

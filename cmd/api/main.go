@@ -66,9 +66,9 @@ func main() {
 	searchUC := usecase.NewSearchUseCase(searchRepo, perfumeRepo, eventRepo, userRepo, log)
 	recsUC := usecase.NewRecommendationUseCase(
 		perfumeRepo, userRepo, userEmbeddingRepo, eventRepo, log,
-		cfg.BayesianM, cfg.ExplorationRate, cfg.EmbeddingDim, cfg.RecCandidateLimit,
+		cfg.BayesianM, cfg.ExplorationRate, cfg.EmbeddingDim, cfg.RecCandidateLimit, cfg.MaxPerBrand,
 	)
-	eventUC := usecase.NewEventUseCase(userRepo, userEmbeddingRepo, eventRepo, perfumeRepo, log, cfg.EmbeddingDim)
+	eventUC := usecase.NewEventUseCase(userRepo, userEmbeddingRepo, eventRepo, perfumeRepo, log, cfg.EmbeddingDim, cfg.EmbeddingDecay)
 
 	// Initialize HTTP handler
 	handler := transporthttp.NewHandler(searchUC, recsUC, eventUC, log)

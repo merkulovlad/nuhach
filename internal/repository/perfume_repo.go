@@ -707,7 +707,8 @@ func (r *PerfumeRepo) VectorSearchByEmbedding(ctx context.Context, embedding []f
 }
 
 // enrichCardsWithNotesAndAccords adds notes and accords to PerfumeCards.
-// Prefers Russian translations, falls back to English.
+// Prefers Russian notes, but keeps accords in English because the current
+// accord translations are noisy and user-facing.
 func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(ctx context.Context, cards []domain.PerfumeCard, perfumeIDs []int64) {
 	// Build ID to index map
 	idToIdx := make(map[int64]int)
@@ -749,14 +750,13 @@ func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(ctx context.Context, cards 
 		}
 	}
 
-	// Get accords (Russian preferred)
+	// Get accords in English.
 	accordsQuery := `
 		SELECT 
 			pa.perfume_id,
-			COALESCE(at.translation_ru, a.name) as accord
+			a.name as accord
 		FROM perfume_accords pa
 		JOIN accords a ON pa.accord_id = a.id
-		LEFT JOIN accord_translations at ON at.accord_id = a.id
 		WHERE pa.perfume_id = ANY($1)
 	`
 
@@ -780,7 +780,8 @@ func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(ctx context.Context, cards 
 }
 
 // enrichPerfumesWithNotesAndAccords adds notes and accords to PerfumeWithEmbedding.
-// Prefers Russian translations, falls back to English.
+// Prefers Russian notes, but keeps accords in English because the current
+// accord translations are noisy and user-facing.
 func (r *PerfumeRepo) enrichPerfumesWithNotesAndAccords(ctx context.Context, perfumes []domain.PerfumeWithEmbedding, perfumeIDs []int64) {
 	// Build ID to index map
 	idToIdx := make(map[int64]int)
@@ -822,14 +823,13 @@ func (r *PerfumeRepo) enrichPerfumesWithNotesAndAccords(ctx context.Context, per
 		}
 	}
 
-	// Get accords (Russian preferred)
+	// Get accords in English.
 	accordsQuery := `
 		SELECT 
 			pa.perfume_id,
-			COALESCE(at.translation_ru, a.name) as accord
+			a.name as accord
 		FROM perfume_accords pa
 		JOIN accords a ON pa.accord_id = a.id
-		LEFT JOIN accord_translations at ON at.accord_id = a.id
 		WHERE pa.perfume_id = ANY($1)
 	`
 
@@ -846,7 +846,7 @@ func (r *PerfumeRepo) enrichPerfumesWithNotesAndAccords(ctx context.Context, per
 		}
 		for id, accords := range accordsMap {
 			if idx, ok := idToIdx[id]; ok {
-				perfumes[idx].AccordsRU = strings.Join(accords, ", ")
+				perfumes[idx].AccordsEN = strings.Join(accords, ", ")
 			}
 		}
 	}

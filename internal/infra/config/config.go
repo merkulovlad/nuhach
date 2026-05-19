@@ -29,6 +29,8 @@ type Config struct {
 	ExplorationRate   float64 // Epsilon for exploration
 	EmbeddingDim      int     // Embedding dimension (384 based on migrations)
 	RecCandidateLimit int     // Number of candidates for recommendations
+	MaxPerBrand       int     // Brand-cap in a single recommendation surface (0 = off)
+	EmbeddingDecay    float64 // EMA weight for past user embedding (1.0 = pure running mean, <1 favors recent)
 }
 
 // Load reads configuration from environment variables using existing patterns.
@@ -54,6 +56,8 @@ func Load() (*Config, error) {
 		ExplorationRate:   0.05, // 5% exploration
 		EmbeddingDim:      768,  // From multilingual-e5-base model
 		RecCandidateLimit: 200,  // Top-N candidates for recs
+		MaxPerBrand:       getEnvInt("MAX_PER_BRAND", 2),
+		EmbeddingDecay:    getEnvFloat("EMBEDDING_DECAY", 0.95),
 	}
 
 	return cfg, nil
@@ -81,6 +85,15 @@ func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intVal, err := strconv.Atoi(value); err == nil {
 			return intVal
+		}
+	}
+	return defaultValue
+}
+
+func getEnvFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
 		}
 	}
 	return defaultValue

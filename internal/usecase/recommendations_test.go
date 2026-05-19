@@ -247,12 +247,12 @@ func TestEventEmbeddingWeight(t *testing.T) {
 }
 
 func TestMergeEmbedding_PositiveWeightPullsToward(t *testing.T) {
-	// User vector points along +X; new item points along +Y with weight 1.
-	// Centroid should rotate from (1,0) toward (1,1)/sqrt(2).
+	// User vector points along +X; new item points along +Y with positive
+	// weight. Centroid should rotate from (1,0) toward +Y and stay unit.
 	user := []float32{1, 0}
 	item := []float32{0, 1}
 
-	got := usecase.MergeEmbedding(user, 1, item, 1.0)
+	got := usecase.MergeEmbedding(user, item, 1.0, 0.95)
 
 	if got[1] <= 0 {
 		t.Errorf("expected positive y-component after positive-weight merge, got %v", got)
@@ -260,7 +260,6 @@ func TestMergeEmbedding_PositiveWeightPullsToward(t *testing.T) {
 	if got[0] <= 0 {
 		t.Errorf("expected positive x-component preserved, got %v", got)
 	}
-	// Result must be unit length.
 	norm := math.Sqrt(float64(got[0]*got[0] + got[1]*got[1]))
 	if math.Abs(norm-1.0) > 1e-5 {
 		t.Errorf("result not normalized, |v|=%v", norm)
@@ -268,25 +267,24 @@ func TestMergeEmbedding_PositiveWeightPullsToward(t *testing.T) {
 }
 
 func TestMergeEmbedding_NegativeWeightPushesAway(t *testing.T) {
-	// User along +X. Disliked item also along +Y. After dislike the
-	// centroid's y-component must be negative (moved away from +Y).
+	// Disliked item along +Y must push the y-component negative.
 	user := []float32{1, 0}
 	item := []float32{0, 1}
 
-	got := usecase.MergeEmbedding(user, 1, item, -0.4)
+	got := usecase.MergeEmbedding(user, item, -0.4, 0.95)
 
 	if got[1] >= 0 {
 		t.Errorf("expected y-component to go negative after dislike, got %v", got)
 	}
 }
 
-func TestMergeEmbedding_DenominatorPositiveOnDislike(t *testing.T) {
-	// With n=0 and a negative weight, naive denom (n+weight) would be
-	// negative and the merge would explode. Guard: we divide by n+|w|.
+func TestMergeEmbedding_NoNaNOnZeroResult(t *testing.T) {
+	// Dislike of the same vector the user already has could in principle
+	// produce a zero vector; normalize must not divide by zero.
 	user := []float32{1, 0, 0}
-	item := []float32{0, 1, 0}
+	item := []float32{1, 0, 0}
 
-	got := usecase.MergeEmbedding(user, 0, item, -0.4)
+	got := usecase.MergeEmbedding(user, item, -1.0, 0.5)
 
 	for i, v := range got {
 		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
@@ -295,19 +293,77 @@ func TestMergeEmbedding_DenominatorPositiveOnDislike(t *testing.T) {
 	}
 }
 
-func TestMergeEmbedding_LargeNDampensSingleEvent(t *testing.T) {
-	// With many prior interactions, a single new event should barely
-	// move the centroid. Cosine to the original user vector must stay
-	// close to 1.
+func TestMergeEmbedding_HighDecayMovesLess(t *testing.T) {
+	// With decay near 1, a single event moves the centroid only a tiny
+	// bit. With low decay, the centroid follows the new item aggressively.
 	user := []float32{1, 0, 0}
 	item := []float32{0, 1, 0}
 
-	got := usecase.MergeEmbedding(user, 1000, item, 1.0)
+	slow := usecase.MergeEmbedding(user, item, 1.0, 0.99)
+	fast := usecase.MergeEmbedding(user, item, 1.0, 0.5)
 
-	sim := usecase.CosineSimilarity(user, got)
-	if sim < 0.999 {
-		t.Errorf("single event moved centroid too much with n=1000: cos=%v", sim)
+	simSlow := usecase.CosineSimilarity(user, slow)
+	simFast := usecase.CosineSimilarity(user, fast)
+
+	if simSlow <= simFast {
+		t.Errorf("expected high-decay centroid to stay closer to original (slow=%v, fast=%v)", simSlow, simFast)
 	}
+	if simSlow < 0.99 {
+		t.Errorf("decay=0.99 moved centroid too much: cos=%v", simSlow)
+	}
+}
+
+func TestMergeEmbedding_UsesDecayEMAFormula(t *testing.T) {
+	tests := []struct {
+		name   string
+		weight float64
+		decay  float64
+		want   []float32
+	}{
+		{
+			name:   "positive weight",
+			weight: 1.0,
+			decay:  0.8,
+			want:   []float32{0.9701425, 0.2425356},
+		},
+		{
+			name:   "negative weight",
+			weight: -0.5,
+			decay:  0.8,
+			want:   []float32{0.9922779, -0.1240347},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := []float32{1, 0}
+			item := []float32{0, 1}
+
+			got := usecase.MergeEmbedding(user, item, tt.weight, tt.decay)
+
+			assertFloat32SliceApprox(t, got, tt.want, 1e-6)
+		})
+	}
+}
+
+func TestMergeEmbedding_DecayOneIgnoresPerfume(t *testing.T) {
+	// decay=1 should keep only the normalized user history.
+	user := []float32{3, 4}
+	item := []float32{0, 100}
+
+	got := usecase.MergeEmbedding(user, item, 1.0, 1.0)
+
+	assertFloat32SliceApprox(t, got, []float32{0.6, 0.8}, 1e-6)
+}
+
+func TestMergeEmbedding_DoesNotMutateInputs(t *testing.T) {
+	user := []float32{1, 0}
+	item := []float32{0, 1}
+
+	_ = usecase.MergeEmbedding(user, item, 1.0, 0.8)
+
+	assertFloat32SliceApprox(t, user, []float32{1, 0}, 0)
+	assertFloat32SliceApprox(t, item, []float32{0, 1}, 0)
 }
 
 // Helper functions
@@ -317,4 +373,16 @@ func intPtr(i int) *int {
 
 func float64Ptr(f float64) *float64 {
 	return &f
+}
+
+func assertFloat32SliceApprox(t *testing.T, got, want []float32, tolerance float64) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("len(got) = %d, want %d", len(got), len(want))
+	}
+	for i := range got {
+		if math.Abs(float64(got[i]-want[i])) > tolerance {
+			t.Fatalf("got[%d] = %v, want %v", i, got[i], want[i])
+		}
+	}
 }

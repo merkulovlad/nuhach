@@ -1,9 +1,13 @@
 .env
 .venv/
+.venv-embeddings/
 .conda/
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.parquet
 .DS_Store
 .vscode/
-

@@ -25,6 +25,7 @@ type RecommendationUseCase struct {
 	explorationRate float64
 	embeddingDim    int
 	candidateLimit  int
+	maxPerBrand     int
 }
 
 // NewRecommendationUseCase creates a new RecommendationUseCase.
@@ -38,6 +39,7 @@ func NewRecommendationUseCase(
 	explorationRate float64,
 	embeddingDim int,
 	candidateLimit int,
+	maxPerBrand int,
 ) *RecommendationUseCase {
 	return &RecommendationUseCase{
 		perfumeRepo:       perfumeRepo,
@@ -49,6 +51,7 @@ func NewRecommendationUseCase(
 		explorationRate:   explorationRate,
 		embeddingDim:      embeddingDim,
 		candidateLimit:    candidateLimit,
+		maxPerBrand:       maxPerBrand,
 	}
 }
 
@@ -118,6 +121,10 @@ func (uc *RecommendationUseCase) GetRecommendations(ctx context.Context, tgID in
 
 	// Score and rank candidates
 	scored := uc.scoreAndRank(candidates, userEmb, globalMean)
+
+	// Diversify by brand before exploration so the bubble doesn't survive
+	// into the final list. With maxPerBrand=0 this is a no-op.
+	scored = applyBrandCap(scored, uc.maxPerBrand)
 
 	// Apply exploration
 	result := uc.applyExploration(scored, limit)
@@ -227,6 +234,62 @@ func ComputeWeightedRating(ratingValue *float64, ratingCount *int, globalMean, b
 	m := bayesianM
 	C := globalMean
 	return (v/(v+m))*R + (m/(v+m))*C
+}
+
+// brandCapOrder returns the indices of items in input order, with items
+// from over-represented brands shoved to the tail. The number of items
+// kept from any one brand is capped at maxPerBrand. Empty brand strings
+// count as their own bucket per-item (we don't want unknown-brand items
+// to collapse together). maxPerBrand <= 0 disables the cap.
+func brandCapOrder(brands []string, maxPerBrand int) []int {
+	if maxPerBrand <= 0 {
+		out := make([]int, len(brands))
+		for i := range brands {
+			out[i] = i
+		}
+		return out
+	}
+	head := make([]int, 0, len(brands))
+	tail := make([]int, 0)
+	counts := make(map[string]int, len(brands))
+	for i, b := range brands {
+		if b == "" {
+			head = append(head, i)
+			continue
+		}
+		if counts[b] >= maxPerBrand {
+			tail = append(tail, i)
+			continue
+		}
+		counts[b]++
+		head = append(head, i)
+	}
+	return append(head, tail...)
+}
+
+// BrandCapOrder exports brandCapOrder for testing.
+func BrandCapOrder(brands []string, maxPerBrand int) []int {
+	return brandCapOrder(brands, maxPerBrand)
+}
+
+// applyBrandCap reorders scored candidates so at most maxPerBrand items
+// from any single brand appear in the head of the slice; overflow items
+// follow at the tail. Final truncation to `limit` happens downstream in
+// applyExploration.
+func applyBrandCap(scored []scoredCandidate, maxPerBrand int) []scoredCandidate {
+	if maxPerBrand <= 0 || len(scored) == 0 {
+		return scored
+	}
+	brands := make([]string, len(scored))
+	for i, c := range scored {
+		brands[i] = c.perfume.Brand
+	}
+	order := brandCapOrder(brands, maxPerBrand)
+	out := make([]scoredCandidate, len(scored))
+	for i, idx := range order {
+		out[i] = scored[idx]
+	}
+	return out
 }
 
 // applyExploration applies epsilon-greedy exploration.

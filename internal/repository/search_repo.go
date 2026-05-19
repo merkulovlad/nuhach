@@ -160,15 +160,16 @@ func mapHitToCard(source map[string]interface{}) domain.PerfumeCard {
 		i := int(v)
 		card.Year = &i
 	}
-	// Prefer Russian notes/accords
+	// Prefer Russian notes, but keep accords in English because the current
+	// accord translations are noisy and user-facing.
 	if v, ok := source["notes_ru"].(string); ok && v != "" {
 		card.Notes = truncateString(v, 100)
 	} else if v, ok := source["notes_en"].(string); ok {
 		card.Notes = truncateString(v, 100)
 	}
-	if v, ok := source["accords_ru"].(string); ok && v != "" {
+	if v, ok := source["accords_en"].(string); ok && v != "" {
 		card.Accords = truncateString(v, 80)
-	} else if v, ok := source["accords_en"].(string); ok {
+	} else if v, ok := source["accords_ru"].(string); ok {
 		card.Accords = truncateString(v, 80)
 	}
 

@@ -8,6 +8,7 @@ the perfume_search table in PostgreSQL with both search and recommendation embed
 import os
 import json
 import pandas as pd
+import numpy as np
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
@@ -24,15 +25,19 @@ BATCH_SIZE = 100
 
 def parse_embedding(value) -> Optional[List[float]]:
     """Parse embedding from string or list."""
-    if pd.isna(value) or value is None:
+    if value is None:
         return None
     if isinstance(value, str):
         try:
             return json.loads(value)
         except json.JSONDecodeError:
             return None
+    if isinstance(value, np.ndarray):
+        return value.tolist()
     if isinstance(value, (list, tuple)):
         return list(value)
+    if pd.isna(value):
+        return None
     return None
 
 
@@ -98,6 +103,13 @@ def create_search_text_en(row: pd.Series) -> str:
 def ingest_embeddings(parquet_path: str, truncate: bool = False):
     """Ingest embeddings from parquet into perfume_search table."""
     print(f"Loading parquet file: {parquet_path}")
+    if not os.path.exists(parquet_path):
+        raise FileNotFoundError(
+            f"Embeddings parquet not found: {parquet_path}. "
+            "Generate data/processed/perfumes_with_embeddings.parquet with "
+            "notebooks/02_creating_embeddings.ipynb or place the precomputed "
+            "file there before running ingest-embeddings."
+        )
     df = pd.read_parquet(parquet_path)
     print(f"Loaded {len(df)} rows")
     

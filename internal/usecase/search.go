@@ -170,16 +170,17 @@ func perfumeToCard(p domain.Perfume) domain.PerfumeCard {
 		Year:        p.Year,
 	}
 	card.Brand = p.Brand
-	// Prefer Russian content for notes/accords
+	// Prefer Russian content for notes, but keep accords in English because
+	// the current accord translations are noisy and user-facing.
 	if p.NotesRU != "" {
 		card.Notes = p.NotesRU
 	} else {
 		card.Notes = p.NotesEN
 	}
-	if p.AccordsRU != "" {
-		card.Accords = p.AccordsRU
-	} else {
+	if p.AccordsEN != "" {
 		card.Accords = p.AccordsEN
+	} else {
+		card.Accords = p.AccordsRU
 	}
 	return card
 }

@@ -17,9 +17,12 @@ type EventUseCase struct {
 	perfumeRepo       domain.PerfumeRepository
 	logger            *zap.Logger
 	embeddingDim      int
+	embeddingDecay    float64
 }
 
-// NewEventUseCase creates a new EventUseCase.
+// NewEventUseCase creates a new EventUseCase. embeddingDecay is the EMA
+// weight applied to the prior user embedding on each update; values in
+// (0,1) favor recent events, 1.0 keeps a pure running mean (no decay).
 func NewEventUseCase(
 	userRepo domain.UserRepository,
 	userEmbeddingRepo domain.UserEmbeddingRepository,
@@ -27,7 +30,11 @@ func NewEventUseCase(
 	perfumeRepo domain.PerfumeRepository,
 	logger *zap.Logger,
 	embeddingDim int,
+	embeddingDecay float64,
 ) *EventUseCase {
+	if embeddingDecay <= 0 || embeddingDecay > 1 {
+		embeddingDecay = 0.95
+	}
 	return &EventUseCase{
 		userRepo:          userRepo,
 		userEmbeddingRepo: userEmbeddingRepo,
@@ -35,6 +42,7 @@ func NewEventUseCase(
 		perfumeRepo:       perfumeRepo,
 		logger:            logger,
 		embeddingDim:      embeddingDim,
+		embeddingDecay:    embeddingDecay,
 	}
 }
 
@@ -138,7 +146,7 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 		})
 	}
 
-	newEmb := mergeEmbedding(userEmb.Embedding, userEmb.NInteractions, perfumeEmb, weight)
+	newEmb := mergeEmbedding(userEmb.Embedding, perfumeEmb, weight, uc.embeddingDecay)
 
 	return uc.userEmbeddingRepo.Upsert(ctx, &domain.UserEmbedding{
 		UserID:        userID,
@@ -148,24 +156,25 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 	})
 }
 
-// mergeEmbedding folds a perfume vector into a user centroid using a
-// weighted running mean. Denominator uses |weight| so n+|w| stays
-// positive on dislikes; numerator carries the sign so the centroid
-// drifts toward (or away from) the item. The result is L2-normalized.
-func mergeEmbedding(user []float32, n int, perfume []float32, weight float64) []float32 {
+// mergeEmbedding folds a perfume vector into a user centroid as an
+// exponential moving average: out = normalize(decay·user + (1-decay)·weight·perfume).
+// Positive weight pulls toward the item, negative pushes away, decay in
+// (0,1) controls how fast old preferences fade (lower = faster decay).
+// decay=1 reduces to "always trust history" — no movement — so the
+// caller should pass <1 in production.
+func mergeEmbedding(user, perfume []float32, weight, decay float64) []float32 {
 	out := make([]float32, len(user))
-	nf := float64(n)
-	denom := nf + math.Abs(weight)
+	novelty := 1 - decay
 	for i := range out {
-		out[i] = float32((float64(user[i])*nf + float64(perfume[i])*weight) / denom)
+		out[i] = float32(decay*float64(user[i]) + novelty*weight*float64(perfume[i]))
 	}
 	normalizeEmbedding(out)
 	return out
 }
 
 // MergeEmbedding exports mergeEmbedding for testing.
-func MergeEmbedding(user []float32, n int, perfume []float32, weight float64) []float32 {
-	return mergeEmbedding(user, n, perfume, weight)
+func MergeEmbedding(user, perfume []float32, weight, decay float64) []float32 {
+	return mergeEmbedding(user, perfume, weight, decay)
 }
 
 // EventEmbeddingWeight exports eventEmbeddingWeight for testing.

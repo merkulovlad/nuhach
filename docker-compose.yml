@@ -91,6 +91,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
       - CSV_PATH=/app/data/processed/dataset_final.csv
+    volumes:
+      - ./data:/app/data:ro
+      - ./scripts:/app/scripts:ro
     command: ["python", "scripts/03_ingest_normalized.py", "--csv", "/app/data/processed/dataset_final.csv"]
 
   ingest-embeddings:
@@ -103,6 +106,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
       - PARQUET_PATH=/app/data/processed/perfumes_with_embeddings.parquet
+    volumes:
+      - ./data:/app/data:ro
+      - ./scripts:/app/scripts:ro
     command: ["python", "scripts/04_ingest_embeddings.py", "--truncate"]
 
   indexer:

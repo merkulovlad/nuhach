@@ -293,4 +293,15 @@ make restart  # Restart all services
 - Russian translations for notes, accords, brands
 - Pre-computed embeddings in `data/processed/perfumes_with_embeddings.parquet` (584MB)
 
+Generate the embeddings parquet before running the full Docker Compose pipeline:
 
+```bash
+make embeddings
+```
+
+For a quick smoke test without generating the full file:
+
+```bash
+make embeddings-venv
+.venv-embeddings/bin/python scripts/05_create_embeddings.py --limit 10 --output /tmp/perfumes_with_embeddings.parquet --force
+```
