@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.pytest_cache
+__pycache__
+*.pyc
+notebooks
+.venv
+.venv-embeddings
+.conda
+.mypy_cache
+.ruff_cache
+.DS_Store

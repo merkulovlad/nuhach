@@ -1,6 +1,7 @@
 """
 Telegram bot command and callback handlers.
 """
+import asyncio
 import logging
 from typing import Optional, List
 
@@ -16,11 +17,13 @@ from .formatters import (
     format_perfume_details,
     format_perfume_card,
     format_error_message,
+    format_store_offers,
 )
 from .keyboards import (
     build_perfume_keyboard,
     build_perfume_list_keyboard,
     build_detail_keyboard,
+    build_offers_keyboard,
     parse_callback_data,
 )
 
@@ -329,6 +332,58 @@ async def callback_similar(callback: CallbackQuery) -> None:
     except Exception as e:
         logger.error("Similar error: %s", e)
         await callback.answer("Failed to load similar perfumes", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("offers:"))
+@router.callback_query(F.data.startswith("refresh_offers:"))
+async def callback_offers(callback: CallbackQuery) -> None:
+    """Start an on-demand store search or return fresh cached offers."""
+    if api_client is None:
+        await callback.answer("Service unavailable", show_alert=True)
+        return
+
+    action, perfume_id = parse_callback_data(callback.data)
+    await callback.answer()
+    await callback.message.edit_text("Ищу наличие в разрешённых магазинах…")
+
+    try:
+        result = await api_client.search_offers(
+            perfume_id,
+            force=action == "refresh_offers",
+        )
+        for _ in range(10):
+            if result.status not in {"searching", "refreshing"}:
+                break
+            await asyncio.sleep(2)
+            result = await api_client.get_offers(perfume_id)
+
+        keyboard = build_offers_keyboard(perfume_id)
+        if result.offers:
+            await callback.message.edit_text(
+                format_store_offers(result.offers),
+                parse_mode=ParseMode.HTML,
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+        elif result.status == "failed":
+            await callback.message.edit_text(
+                "Автоматический поиск сейчас недоступен: правила источников не разрешают "
+                "обход нужных страниц или не удалось безопасно проверить данные.",
+                reply_markup=keyboard,
+            )
+        elif result.status in {"searching", "refreshing"}:
+            await callback.message.edit_text(
+                "Поиск продолжается. Проверьте предложения немного позже.",
+                reply_markup=keyboard,
+            )
+        else:
+            await callback.message.edit_text(
+                "В разрешённых источниках предложений не найдено.",
+                reply_markup=keyboard,
+            )
+    except Exception as e:
+        logger.error("Offers error: %s", e)
+        await callback.message.edit_text("Не удалось получить предложения в магазинах.")
 
 
 @router.callback_query(F.data.startswith("like:"))

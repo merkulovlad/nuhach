@@ -142,6 +142,25 @@ services:
       - ENABLE_VECTOR_SEARCH=true
     restart: unless-stopped
 
+  offer-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - OFFER_CACHE_TTL_HOURS=${OFFER_CACHE_TTL_HOURS:-8}
+      - SCRAPER_POLL_SECONDS=${SCRAPER_POLL_SECONDS:-3}
+      - SCRAPER_STORES=${SCRAPER_STORES:-Ozon,ЛЭТУАЛЬ,Золотое Яблоко,Рандеву}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
+      - OPENROUTER_MAX_TOKENS=${OPENROUTER_MAX_TOKENS:-4000}
+      - OPENROUTER_MAX_ATTEMPTS=${OPENROUTER_MAX_ATTEMPTS:-2}
+      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-https://github.com/merkulovlad/nuhach}
+    restart: unless-stopped
+
 volumes:
   pgdata:
   osdata:

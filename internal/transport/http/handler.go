@@ -16,6 +16,7 @@ type Handler struct {
 	searchUC *usecase.SearchUseCase
 	recsUC   *usecase.RecommendationUseCase
 	eventUC  *usecase.EventUseCase
+	offerUC  *usecase.OfferUseCase
 	logger   *zap.Logger
 }
 
@@ -24,12 +25,14 @@ func NewHandler(
 	searchUC *usecase.SearchUseCase,
 	recsUC *usecase.RecommendationUseCase,
 	eventUC *usecase.EventUseCase,
+	offerUC *usecase.OfferUseCase,
 	logger *zap.Logger,
 ) *Handler {
 	return &Handler{
 		searchUC: searchUC,
 		recsUC:   recsUC,
 		eventUC:  eventUC,
+		offerUC:  offerUC,
 		logger:   logger,
 	}
 }
@@ -48,6 +51,8 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	// Perfumes
 	api.Get("/perfumes/:id", h.GetPerfume)
 	api.Get("/perfumes/:id/similar", h.GetSimilarPerfumes)
+	api.Get("/perfumes/:id/offers", h.GetOffers)
+	api.Post("/perfumes/:id/offers/search", h.SearchOffers)
 
 	// User events
 	api.Post("/users/:tg_id/events", h.CreateEvent)

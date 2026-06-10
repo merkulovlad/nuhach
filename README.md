@@ -171,6 +171,30 @@ Content-Type: application/json
 
 Event types: `impression`, `click`, `like`, `dislike`, `save`
 
+### On-demand store offers
+
+```http
+POST /api/perfumes/:id/offers/search
+GET  /api/perfumes/:id/offers
+```
+
+The first request creates a PostgreSQL job. `offer-worker` checks Ozon,
+L'Etoile, Gold Apple and Randewoo only when requested, caches normalized offers for eight
+hours, and deduplicates concurrent searches for the same perfume. Direct HTTP
+access is fail-closed against each site's current `robots.txt`. When search pages
+are disallowed, the worker can use OpenRouter's domain-restricted web-search
+plugin instead of bypassing site controls.
+
+Empty results are cached for two hours and scraper failures for 15 minutes, so
+repeated user clicks do not hammer stores or OpenRouter.
+
+Required for the OpenRouter fallback:
+
+```env
+OPENROUTER_API_KEY=...
+OPENROUTER_MODEL=provider/model-name
+```
+
 ## Configuration
 
 All config in `.env`:
@@ -305,3 +329,11 @@ For a quick smoke test without generating the full file:
 make embeddings-venv
 .venv-embeddings/bin/python scripts/05_create_embeddings.py --limit 10 --output /tmp/perfumes_with_embeddings.parquet --force
 ```
+
+## License
+
+GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE).
+
+If you modify this project and make the modified software available to users
+over a network, you must offer those users the corresponding source code under
+the AGPL-3.0.

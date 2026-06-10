@@ -27,7 +27,7 @@ type Config struct {
 	// Algorithm configuration
 	BayesianM         float64 // Threshold for Bayesian weighted rating
 	ExplorationRate   float64 // Epsilon for exploration
-	EmbeddingDim      int     // Embedding dimension (384 based on migrations)
+	EmbeddingDim      int     // Embedding dimension used by perfume and user vectors
 	RecCandidateLimit int     // Number of candidates for recommendations
 	MaxPerBrand       int     // Brand-cap in a single recommendation surface (0 = off)
 	EmbeddingDecay    float64 // EMA weight for past user embedding (1.0 = pure running mean, <1 favors recent)

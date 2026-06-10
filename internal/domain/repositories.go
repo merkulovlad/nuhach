@@ -3,6 +3,13 @@ package domain
 
 import "context"
 
+// OfferRepository stores demand-driven store search jobs and cached offers.
+type OfferRepository interface {
+	GetOffers(ctx context.Context, perfumeID int64) ([]StoreOffer, error)
+	GetLatestJob(ctx context.Context, perfumeID int64) (*OfferSearchJob, error)
+	CreateSearchJob(ctx context.Context, perfumeID int64) (*OfferSearchJob, error)
+}
+
 // PerfumeRepository defines operations for perfume data access.
 type PerfumeRepository interface {
 	// GetByID retrieves a perfume by its ID.

@@ -61,6 +61,7 @@ func main() {
 	userRepo := repository.NewUserRepo(database, log)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(database, log, cfg.EmbeddingDim)
 	eventRepo := repository.NewEventRepo(database, log)
+	offerRepo := repository.NewOfferRepo(database, log)
 
 	// Initialize use cases
 	searchUC := usecase.NewSearchUseCase(searchRepo, perfumeRepo, eventRepo, userRepo, log)
@@ -69,9 +70,10 @@ func main() {
 		cfg.BayesianM, cfg.ExplorationRate, cfg.EmbeddingDim, cfg.RecCandidateLimit, cfg.MaxPerBrand,
 	)
 	eventUC := usecase.NewEventUseCase(userRepo, userEmbeddingRepo, eventRepo, perfumeRepo, log, cfg.EmbeddingDim, cfg.EmbeddingDecay)
+	offerUC := usecase.NewOfferUseCase(perfumeRepo, offerRepo)
 
 	// Initialize HTTP handler
-	handler := transporthttp.NewHandler(searchUC, recsUC, eventUC, log)
+	handler := transporthttp.NewHandler(searchUC, recsUC, eventUC, offerUC, log)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{

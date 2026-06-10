@@ -63,6 +63,62 @@ class SearchResult:
     exploration_ids: Optional[List[int]] = None
 
 
+@dataclass
+class StoreOffer:
+    store: str
+    title: str
+    price: float
+    currency: str
+    url: str
+    old_price: Optional[float] = None
+    seller: Optional[str] = None
+    volume_ml: Optional[int] = None
+    concentration: Optional[str] = None
+    product_type: Optional[str] = None
+    in_stock: bool = True
+    risk_level: str = "unknown"
+    comment: Optional[str] = None
+    checked_at: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "StoreOffer":
+        return cls(
+            store=data.get("store", "Unknown"),
+            title=data.get("title", "Unknown"),
+            price=float(data.get("price", 0)),
+            currency=data.get("currency", "RUB"),
+            url=data.get("url", ""),
+            old_price=float(data["old_price"]) if data.get("old_price") is not None else None,
+            seller=data.get("seller"),
+            volume_ml=data.get("volume_ml"),
+            concentration=data.get("concentration"),
+            product_type=data.get("product_type"),
+            in_stock=data.get("in_stock", True),
+            risk_level=data.get("risk_level", "unknown"),
+            comment=data.get("comment"),
+            checked_at=data.get("checked_at"),
+        )
+
+
+@dataclass
+class OfferSearchResult:
+    perfume_id: int
+    status: str
+    offers: List[StoreOffer]
+    job_id: Optional[int] = None
+    error: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "OfferSearchResult":
+        return cls(
+            perfume_id=data.get("perfume_id", 0),
+            status=data.get("status", "empty"),
+            offers=[StoreOffer.from_dict(item) for item in (data.get("offers") or [])],
+            job_id=data.get("job_id"),
+            error=data.get("error"),
+        )
+
+
 class APIError(Exception):
     """Custom exception for API errors."""
     def __init__(self, message: str, status_code: Optional[int] = None):
@@ -262,6 +318,17 @@ class APIClient:
         data = await self._request("GET", f"/api/users/{tg_id}/saves")
         raw_items = data.get("items") or []
         return [PerfumeItem.from_dict(item) for item in raw_items]
+
+    async def get_offers(self, perfume_id: int) -> OfferSearchResult:
+        data = await self._request("GET", f"/api/perfumes/{perfume_id}/offers")
+        return OfferSearchResult.from_dict(data)
+
+    async def search_offers(self, perfume_id: int, force: bool = False) -> OfferSearchResult:
+        params = {"force": "true"} if force else None
+        data = await self._request(
+            "POST", f"/api/perfumes/{perfume_id}/offers/search", params=params
+        )
+        return OfferSearchResult.from_dict(data)
     
     async def create_event(
         self,

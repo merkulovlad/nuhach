@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 .venv-embeddings/
 .conda/
@@ -8,6 +10,16 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 *.parquet
+*.log
+*.pid
+*.tmp
 .DS_Store
 .vscode/
+.idea/
+*.swp
+*.swo

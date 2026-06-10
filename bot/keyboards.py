@@ -110,6 +110,10 @@ def build_detail_keyboard(perfume_id: int) -> InlineKeyboardMarkup:
                 text="🔄 Similar",
                 callback_data=f"similar:{perfume_id}"
             ),
+            InlineKeyboardButton(
+                text="🛒 Где купить",
+                callback_data=f"offers:{perfume_id}"
+            ),
         ],
         [
             InlineKeyboardButton(text="👍", callback_data=f"like:{perfume_id}"),
@@ -119,6 +123,13 @@ def build_detail_keyboard(perfume_id: int) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text="🔙 Back", callback_data="back"),
         ],
+    ])
+
+
+def build_offers_keyboard(perfume_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Обновить цены", callback_data=f"refresh_offers:{perfume_id}")],
+        [InlineKeyboardButton(text="📋 К аромату", callback_data=f"details:{perfume_id}")],
     ])
 
 

@@ -1,8 +1,9 @@
 """
 Message formatters for Telegram output.
 """
+from html import escape
 from typing import List, Optional
-from .api_client import PerfumeItem
+from .api_client import PerfumeItem, StoreOffer
 
 
 def format_rating(rating_value: Optional[float], rating_count: Optional[int]) -> str:
@@ -117,3 +118,37 @@ def format_error_message(error: str = "default") -> str:
         "no_saves": "📑 You haven't saved any perfumes yet. Use the Save button to save perfumes you like!",
     }
     return messages.get(error, messages["default"])
+
+
+def format_store_offers(offers: List[StoreOffer]) -> str:
+    if not offers:
+        return "<b>Предложения в магазинах</b>\n\nПодходящих предложений не найдено."
+
+    lines = ["<b>Предложения в магазинах</b>", ""]
+    for offer in offers[:5]:
+        variant = " ".join(
+            value for value in (
+                offer.concentration or "",
+                f"{offer.volume_ml} мл" if offer.volume_ml else "",
+                "тестер" if offer.product_type == "tester" else "",
+            ) if value
+        )
+        price = f"{offer.price:,.0f}".replace(",", " ")
+        old_price = ""
+        if offer.old_price and offer.old_price > offer.price:
+            formatted_old = f"{offer.old_price:,.0f}".replace(",", " ")
+            old_price = f" (обычная цена {formatted_old} {escape(offer.currency)})"
+        lines.append(
+            f"<b>{escape(offer.store)}</b> — {price} {escape(offer.currency)}{old_price}"
+        )
+        lines.append(f'<a href="{escape(offer.url, quote=True)}">{escape(offer.title[:120])}</a>')
+        if variant:
+            lines.append(escape(variant))
+        if offer.seller:
+            lines.append(f"Продавец: {escape(offer.seller)}")
+        if offer.comment:
+            prefix = "⚠️ " if offer.risk_level in {"medium", "high"} else ""
+            lines.append(prefix + escape(offer.comment[:250]))
+        lines.append("")
+    lines.append("Оценка риска основана на косвенных признаках и не подтверждает подделку.")
+    return "\n".join(lines)
