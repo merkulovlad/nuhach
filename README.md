@@ -12,23 +12,81 @@ Telegram bot for perfume recommendations powered by hybrid search (BM25 + embedd
 
 ## Quick Start
 
+### 1. Prerequisites
+
+- Docker with Docker Compose v2
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- The dataset at `data/processed/dataset_final.csv`
+- The embeddings file at `data/processed/perfumes_with_embeddings.parquet`
+- An OpenRouter account, API key, model and available credits for store-offer web search
+
+OpenRouter is not needed for perfume search and recommendations, but it is
+required for the full store-offer fallback. Direct store adapters frequently
+cannot read JavaScript-rendered pages or pages blocked by `robots.txt`.
+
+Create an OpenRouter key and add credits at:
+
+- <https://openrouter.ai/settings/keys>
+- <https://openrouter.ai/settings/credits>
+
+### 2. Prepare embeddings
+
+Skip this step when `data/processed/perfumes_with_embeddings.parquet` already
+exists. Otherwise generate it locally:
+
 ```bash
-# 1. Set up environment
-cp .env.example .env
-# Add your BOT_API_KEY to .env
-
-# 2. Start everything with one command
-docker compose up -d
-
-# 3. View logs
-docker compose logs -f bot
-docker compose logs -f api
+make embeddings
 ```
 
-**⏱️ First Startup**: Takes 3-5 minutes (embeddings ingestion + model download)  
-**🚀 Subsequent Restarts**: <30 seconds
+This downloads embedding models and may require several gigabytes of disk
+space and significant CPU time.
 
-That's it! The bot is now running and connected to Telegram.
+### 3. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set at least:
+
+```env
+DB_PASSWORD=replace_with_a_strong_password
+OPENSEARCH_INITIAL_ADMIN_PASSWORD=replace_with_a_strong_password
+BOT_API_KEY=123456789:telegram_bot_token
+
+# Required for full store-offer search
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=openrouter/auto
+```
+
+`openrouter/auto` may select paid models, and web-search usage may consume
+credits. A key without enough credits returns HTTP `402 Insufficient credits`.
+
+### 4. Build and start
+
+```bash
+docker compose up -d --build
+```
+
+The first run builds images, migrates PostgreSQL, imports the dataset and
+embeddings, recreates the OpenSearch index, and downloads the bot embedding
+model. Depending on hardware and network speed, this can take considerably
+longer than a normal restart.
+
+Monitor initialization:
+
+```bash
+docker compose ps -a
+docker compose logs -f migrate ingest ingest-embeddings indexer
+```
+
+After `indexer` exits successfully, `bot` starts. Verify the long-running
+services:
+
+```bash
+docker compose ps api bot offer-worker postgres opensearch
+curl http://localhost:8080/api/health
+```
 
 ### What Happens on Startup
 
@@ -38,23 +96,26 @@ Services start automatically in order:
 2. **Migrate** - Database migrations run
 3. **API** - Go backend starts (Fiber HTTP server)
 4. **Ingest** - Loads 24,063 perfumes from CSV into PostgreSQL
-5. **Ingest Embeddings** - Loads search + rec embeddings (768-dim vectors) into perfume_search table
+5. **Ingest Embeddings** - Loads search + rec embeddings (768-dim vectors) into `perfume_search`
 6. **Indexer** - Builds OpenSearch BM25 index from PostgreSQL data
 7. **Bot** - Telegram bot starts (downloads multilingual-e5-base model on first run)
+8. **Offer Worker** - Polls PostgreSQL for on-demand store-search jobs
 
 ### Why First Startup is Slow
 
-**Embedding Ingestion** (~2-3 minutes):
+**Embedding ingestion**:
 - Loads 584MB parquet file with 24,063 perfumes
 - Each perfume has 2 embeddings × 768 dimensions = ~1.5M floats
 - Inserts into PostgreSQL with pgvector indexing
 
-**Model Download** (~1-2 minutes):
+**Model download**:
 - Bot downloads `intfloat/multilingual-e5-base` (~500MB) from HuggingFace
 - Cached in container after first download
 - Pre-loads model before accepting requests (no hanging on first search)
 
-**Subsequent Restarts**: Only services restart, data persists in Docker volumes.
+Subsequent restarts reuse PostgreSQL and OpenSearch volumes. The one-shot
+`migrate`, `ingest`, `ingest-embeddings` and `indexer` containers may appear as
+`Exited (0)` after successful completion; this is expected.
 
 ## Bot Commands
 
@@ -99,6 +160,7 @@ Services start automatically in order:
 │   └── transport/http/    # Fiber HTTP handlers
 │
 ├── migrations/            # PostgreSQL migrations (pgvector, tables, indexes)
+├── scraper/               # On-demand store-offer worker and OpenRouter fallback
 ├── scripts/               # Data ingestion scripts
 │   ├── 03_ingest_normalized.py   # Load perfumes from CSV
 │   └── 04_ingest_embeddings.py  # Load embeddings from parquet
@@ -192,8 +254,13 @@ Required for the OpenRouter fallback:
 
 ```env
 OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=provider/model-name
+OPENROUTER_MODEL=openrouter/auto
 ```
+
+The worker sends one domain-restricted request per configured store. It only
+accepts a full public purchase price, not an installment payment, login-only
+price or promo-code price. Catalog links can be returned when a product-card
+URL cannot be verified, and are marked as catalog links in the bot response.
 
 ## Configuration
 
@@ -217,6 +284,17 @@ OPENSEARCH_INDEX=perfumes
 
 # API
 SERVER_PORT=8080
+
+# Store-offer worker
+OFFER_CACHE_TTL_HOURS=8
+SCRAPER_STORES=Ozon,ЛЭТУАЛЬ,Золотое Яблоко,Рандеву
+
+# OpenRouter web-search fallback
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=openrouter/auto
+OPENROUTER_MAX_TOKENS=4000
+OPENROUTER_MAX_ATTEMPTS=2
+OPENROUTER_SITE_URL=https://github.com/merkulovlad/nuhach
 ```
 
 ## Recommendations Algorithm
@@ -245,7 +323,7 @@ Epsilon-greedy with 5% exploration rate - occasionally shows random perfumes to 
 ### Prerequisites
 - Docker & Docker Compose
 - Python 3.12+ (for local bot development)
-- Go 1.24+ (for API development)
+- Go 1.25+ (for API development)
 
 ### Local Development
 
@@ -260,6 +338,12 @@ go run ./cmd/api
 export BOT_API_KEY=your_token
 export API_BASE_URL=http://localhost:8080
 python -m bot.main
+
+# Run the offer worker locally (after pip install -r requirements-scraper.txt)
+export DATABASE_URL=postgresql://admin:password@localhost:5432/nuhach
+export OPENROUTER_API_KEY=sk-or-v1-...
+export OPENROUTER_MODEL=openrouter/auto
+python -m scraper.worker
 ```
 
 ### Database Access
@@ -281,6 +365,7 @@ curl http://localhost:9200/perfumes/_search?pretty
 # View specific service logs
 docker compose logs -f bot
 docker compose logs -f api
+docker compose logs -f offer-worker
 
 # Restart service
 docker compose restart bot
@@ -288,6 +373,7 @@ docker compose restart bot
 # Rebuild after code changes
 docker compose build bot && docker compose up -d bot
 docker compose build api && docker compose up -d api
+docker compose build offer-worker && docker compose up -d offer-worker
 
 # Fresh start (deletes all data)
 docker compose down -v && docker compose up -d
@@ -296,7 +382,7 @@ docker compose down -v && docker compose up -d
 ## Makefile Commands
 
 ```bash
-make up       # Start all services
+make up       # Start all services (same as docker compose up -d)
 make down     # Stop all services  
 make logs     # View all logs
 make restart  # Restart all services
@@ -305,8 +391,8 @@ make restart  # Restart all services
 ## Tech Stack
 
 - **Bot**: Python 3.12, aiogram 3.4, sentence-transformers, torch
-- **API**: Go 1.24, Fiber, pgx (PostgreSQL driver)
-- **Search**: OpenSearch 2.12 (BM25), pgvector (cosine similarity)
+- **API**: Go 1.25, Fiber, pgx (PostgreSQL driver)
+- **Search**: OpenSearch 2.x (BM25), pgvector (cosine similarity)
 - **Embeddings**: multilingual-e5-base (search), paraphrase-multilingual-mpnet (recommendations)
 - **Database**: PostgreSQL 16 with pgvector extension
 - **Deployment**: Docker Compose
