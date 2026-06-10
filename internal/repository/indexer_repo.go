@@ -43,6 +43,7 @@ func (r *IndexerRepo) IndexPerfumes(ctx context.Context, perfumes []domain.Perfu
 
 	for _, p := range perfumes {
 		doc := perfumeToDoc(p)
+
 		data, err := json.Marshal(doc)
 		if err != nil {
 			r.logger.Error("failed to marshal perfume", zap.Int64("id", p.ID), zap.Error(err))
@@ -53,7 +54,12 @@ func (r *IndexerRepo) IndexPerfumes(ctx context.Context, perfumes []domain.Perfu
 			Action:     "index",
 			DocumentID: fmt.Sprintf("%d", p.ID),
 			Body:       bytes.NewReader(data),
-			OnFailure: func(ctx context.Context, item opensearchutil.BulkIndexerItem, res opensearchutil.BulkIndexerResponseItem, err error) {
+			OnFailure: func(
+				ctx context.Context,
+				item opensearchutil.BulkIndexerItem,
+				res opensearchutil.BulkIndexerResponseItem,
+				err error,
+			) {
 				r.logger.Error("failed to index document",
 					zap.String("doc_id", item.DocumentID),
 					zap.String("error", res.Error.Reason),
@@ -93,33 +99,43 @@ func perfumeToDoc(p domain.Perfume) map[string]interface{} {
 	if p.Brand != "" {
 		doc["brand_en"] = p.Brand
 	}
+
 	if p.Gender != "" {
 		doc["gender_en"] = p.Gender
 	}
+
 	if p.GenderRU != "" {
 		doc["gender_ru"] = p.GenderRU
 	}
+
 	if p.Year != nil {
 		doc["year"] = *p.Year
 	}
+
 	if p.RatingValue != nil {
 		doc["rating_value"] = *p.RatingValue
 	}
+
 	if p.RatingCount != nil {
 		doc["rating_count"] = *p.RatingCount
 	}
+
 	if p.NotesEN != "" {
 		doc["notes_en"] = p.NotesEN
 	}
+
 	if p.NotesRU != "" {
 		doc["notes_ru"] = p.NotesRU
 	}
+
 	if p.AccordsEN != "" {
 		doc["accords_en"] = p.AccordsEN
 	}
+
 	if p.AccordsRU != "" {
 		doc["accords_ru"] = p.AccordsRU
 	}
+
 	if p.Perfumers != "" {
 		doc["perfumers_en"] = p.Perfumers
 	}
@@ -140,6 +156,7 @@ func (r *IndexerRepo) DeleteIndex(ctx context.Context) error {
 	}
 
 	r.logger.Info("Index deleted", zap.String("index", r.indexName))
+
 	return nil
 }
 
@@ -185,7 +202,10 @@ func (r *IndexerRepo) CreateIndex(ctx context.Context) error {
 				"notes_ru": { "type": "text", "analyzer": "mix_ru_en" },
 				"accords_en": { "type": "text", "analyzer": "mix_ru_en" },
 				"accords_ru": { "type": "text", "analyzer": "mix_ru_en" },
-				"perfumers_en": { "type": "text", "analyzer": "mix_ru_en", "fields": { "keyword": { "type": "keyword" } } }
+				"perfumers_en": {
+				  "type": "text", "analyzer": "mix_ru_en",
+				  "fields": { "keyword": { "type": "keyword" } }
+				}
 			}
 		}
 	}`
@@ -204,5 +224,6 @@ func (r *IndexerRepo) CreateIndex(ctx context.Context) error {
 	}
 
 	r.logger.Info("Index created", zap.String("index", r.indexName))
+
 	return nil
 }

@@ -1,10 +1,9 @@
 import re
 import unicodedata
+from collections.abc import Iterable
 from statistics import median
-from typing import Iterable
 
 from .models import Offer, PerfumeTarget
-
 
 VOLUME_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:ml|мл)\b", re.IGNORECASE)
 CONCENTRATIONS = {
@@ -102,7 +101,9 @@ def assess_price_risk(offers: list[Offer]) -> None:
                         "Проверьте продавца, отзывы, маркировку и возможность возврата."
                     )
                 else:
-                    offer.comment = "Цена заметно ниже рынка. Стоит дополнительно проверить продавца и отзывы."
+                    offer.comment = (
+                        "Цена заметно ниже рынка. Стоит дополнительно проверить продавца и отзывы."
+                    )
             else:
                 offer.risk_level = "low"
                 offer.comment = "Цена находится в обычном диапазоне найденных предложений."

@@ -1,5 +1,5 @@
-from scraper.models import Offer
 from scraper.matching import deduplicate_offers
+from scraper.models import Offer
 
 
 def test_deduplicate_prefers_product_card_over_catalog_link():

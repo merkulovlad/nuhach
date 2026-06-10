@@ -69,7 +69,10 @@ func main() {
 		perfumeRepo, userRepo, userEmbeddingRepo, eventRepo, log,
 		cfg.BayesianM, cfg.ExplorationRate, cfg.EmbeddingDim, cfg.RecCandidateLimit, cfg.MaxPerBrand,
 	)
-	eventUC := usecase.NewEventUseCase(userRepo, userEmbeddingRepo, eventRepo, perfumeRepo, log, cfg.EmbeddingDim, cfg.EmbeddingDecay)
+	eventUC := usecase.NewEventUseCase(
+		userRepo, userEmbeddingRepo, eventRepo, perfumeRepo, log,
+		cfg.EmbeddingDim, cfg.EmbeddingDecay,
+	)
 	offerUC := usecase.NewOfferUseCase(perfumeRepo, offerRepo)
 
 	// Initialize HTTP handler
@@ -100,7 +103,10 @@ func main() {
 		<-sigChan
 		log.Info("Shutting down server...")
 		cancel()
-		app.Shutdown()
+
+		if err := app.Shutdown(); err != nil {
+			log.Error("Failed to shut down server", zap.Error(err))
+		}
 	}()
 
 	// Start server

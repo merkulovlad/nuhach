@@ -29,7 +29,7 @@ func (r *EventRepo) Create(ctx context.Context, event *domain.UserEvent) error {
 	now := time.Now()
 
 	// Map rating to interaction_score (1-5 -> 0.2-1.0)
-	var score float64 = 1.0
+	score := 1.0
 	if event.Rating != nil {
 		score = float64(*event.Rating) / 5.0
 	}
@@ -58,7 +58,11 @@ func (r *EventRepo) Create(ctx context.Context, event *domain.UserEvent) error {
 }
 
 // GetUserInteractedPerfumes retrieves perfume IDs the user has interacted with.
-func (r *EventRepo) GetUserInteractedPerfumes(ctx context.Context, userID int64, eventTypes []domain.EventType) ([]int64, error) {
+func (r *EventRepo) GetUserInteractedPerfumes(
+	ctx context.Context,
+	userID int64,
+	eventTypes []domain.EventType,
+) ([]int64, error) {
 	if len(eventTypes) == 0 {
 		return nil, nil
 	}
@@ -66,11 +70,13 @@ func (r *EventRepo) GetUserInteractedPerfumes(ctx context.Context, userID int64,
 	placeholders := make([]string, len(eventTypes))
 	args := make([]interface{}, len(eventTypes)+1)
 	args[0] = userID
+
 	for i, et := range eventTypes {
 		placeholders[i] = fmt.Sprintf("$%d", i+2)
 		args[i+1] = string(et)
 	}
 
+	// #nosec G201 -- Placeholders are generated locally; event values remain query arguments.
 	query := fmt.Sprintf(`
 		SELECT DISTINCT perfume_id
 		FROM user_events
@@ -84,11 +90,13 @@ func (r *EventRepo) GetUserInteractedPerfumes(ctx context.Context, userID int64,
 	defer rows.Close()
 
 	var ids []int64
+
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("failed to scan perfume id: %w", err)
 		}
+
 		ids = append(ids, id)
 	}
 
@@ -110,21 +118,29 @@ func (r *EventRepo) GetUserLikedPerfumes(ctx context.Context, userID int64, limi
 	defer rows.Close()
 
 	var events []domain.UserEvent
-	for rows.Next() {
-		var e domain.UserEvent
-		var eventType string
-		var rating sql.NullInt64
-		var requestID sql.NullString
 
-		if err := rows.Scan(&e.ID, &e.UserID, &e.TgID, &e.PerfumeID, &eventType, &rating, &requestID, &e.CreatedAt); err != nil {
+	for rows.Next() {
+		var (
+			e         domain.UserEvent
+			eventType string
+			rating    sql.NullInt64
+			requestID sql.NullString
+		)
+
+		if err := rows.Scan(
+			&e.ID, &e.UserID, &e.TgID, &e.PerfumeID,
+			&eventType, &rating, &requestID, &e.CreatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("failed to scan event: %w", err)
 		}
 
 		e.EventType = domain.EventType(eventType)
+
 		if rating.Valid {
 			r := int(rating.Int64)
 			e.Rating = &r
 		}
+
 		if requestID.Valid {
 			e.RequestID = requestID.String
 		}
@@ -168,11 +184,13 @@ func (r *EventRepo) GetUserSaves(ctx context.Context, userID int64) ([]int64, er
 	defer rows.Close()
 
 	var ids []int64
+
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("failed to scan perfume id: %w", err)
 		}
+
 		ids = append(ids, id)
 	}
 
@@ -184,6 +202,7 @@ func int64SliceToString(s []int64) string {
 	for i, v := range s {
 		parts[i] = fmt.Sprintf("%d", v)
 	}
+
 	return strings.Join(parts, ",")
 }
 
@@ -192,6 +211,7 @@ func intSliceToString(s []int) string {
 	for i, v := range s {
 		parts[i] = fmt.Sprintf("%d", v)
 	}
+
 	return strings.Join(parts, ",")
 }
 

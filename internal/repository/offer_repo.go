@@ -16,10 +16,12 @@ type OfferRepo struct {
 	logger *zap.Logger
 }
 
+// NewOfferRepo creates a PostgreSQL-backed offer repository.
 func NewOfferRepo(db *sql.DB, logger *zap.Logger) *OfferRepo {
 	return &OfferRepo{db: db, logger: logger}
 }
 
+// GetOffers returns cached store offers for a perfume.
 func (r *OfferRepo) GetOffers(ctx context.Context, perfumeID int64) ([]domain.StoreOffer, error) {
 	const query = `
 		SELECT id, perfume_id, search_job_id, store, seller, title, price, old_price,
@@ -37,11 +39,14 @@ func (r *OfferRepo) GetOffers(ctx context.Context, perfumeID int64) ([]domain.St
 	defer rows.Close()
 
 	offers := make([]domain.StoreOffer, 0)
+
 	for rows.Next() {
-		var offer domain.StoreOffer
-		var jobID, volume, reviews sql.NullInt64
-		var seller, concentration, productType, comment sql.NullString
-		var oldPrice, rating sql.NullFloat64
+		var (
+			offer                                       domain.StoreOffer
+			jobID, volume, reviews                      sql.NullInt64
+			seller, concentration, productType, comment sql.NullString
+			oldPrice, rating                            sql.NullFloat64
+		)
 
 		if err := rows.Scan(
 			&offer.ID, &offer.PerfumeID, &jobID, &offer.Store, &seller,
@@ -57,22 +62,27 @@ func (r *OfferRepo) GetOffers(ctx context.Context, perfumeID int64) ([]domain.St
 			v := jobID.Int64
 			offer.SearchJobID = &v
 		}
+
 		if volume.Valid {
 			v := int(volume.Int64)
 			offer.VolumeML = &v
 		}
+
 		if reviews.Valid {
 			v := int(reviews.Int64)
 			offer.ReviewsCount = &v
 		}
+
 		if oldPrice.Valid {
 			v := oldPrice.Float64
 			offer.OldPrice = &v
 		}
+
 		if rating.Valid {
 			v := rating.Float64
 			offer.Rating = &v
 		}
+
 		offer.Seller = seller.String
 		offer.Concentration = concentration.String
 		offer.ProductType = productType.String
@@ -83,9 +93,11 @@ func (r *OfferRepo) GetOffers(ctx context.Context, perfumeID int64) ([]domain.St
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate store offers: %w", err)
 	}
+
 	return offers, nil
 }
 
+// GetLatestJob returns the latest offer search job for a perfume.
 func (r *OfferRepo) GetLatestJob(ctx context.Context, perfumeID int64) (*domain.OfferSearchJob, error) {
 	const query = `
 		SELECT id, perfume_id, status, requested_at, started_at, completed_at, error
@@ -97,6 +109,7 @@ func (r *OfferRepo) GetLatestJob(ctx context.Context, perfumeID int64) (*domain.
 	return scanOfferSearchJob(r.db.QueryRowContext(ctx, query, perfumeID))
 }
 
+// CreateSearchJob creates or returns the active offer search job for a perfume.
 func (r *OfferRepo) CreateSearchJob(ctx context.Context, perfumeID int64) (*domain.OfferSearchJob, error) {
 	const insert = `
 		INSERT INTO offer_search_jobs (perfume_id, status)
@@ -108,6 +121,7 @@ func (r *OfferRepo) CreateSearchJob(ctx context.Context, perfumeID int64) (*doma
 	if err == nil {
 		return job, nil
 	}
+
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("create offer search job: %w", err)
 	}
@@ -118,10 +132,12 @@ func (r *OfferRepo) CreateSearchJob(ctx context.Context, perfumeID int64) (*doma
 		WHERE perfume_id = $1 AND status IN ('queued', 'running')
 		ORDER BY requested_at DESC
 		LIMIT 1`
+
 	job, err = scanOfferSearchJob(r.db.QueryRowContext(ctx, active, perfumeID))
 	if err != nil {
 		return nil, fmt.Errorf("get active offer search job: %w", err)
 	}
+
 	return job, nil
 }
 
@@ -130,21 +146,28 @@ type rowScanner interface {
 }
 
 func scanOfferSearchJob(row rowScanner) (*domain.OfferSearchJob, error) {
-	var job domain.OfferSearchJob
-	var startedAt, completedAt sql.NullTime
-	var jobError sql.NullString
+	var (
+		job                    domain.OfferSearchJob
+		startedAt, completedAt sql.NullTime
+		jobError               sql.NullString
+	)
+
 	if err := row.Scan(
 		&job.ID, &job.PerfumeID, &job.Status, &job.RequestedAt,
 		&startedAt, &completedAt, &jobError,
 	); err != nil {
 		return nil, err
 	}
+
 	if startedAt.Valid {
 		job.StartedAt = &startedAt.Time
 	}
+
 	if completedAt.Valid {
 		job.CompletedAt = &completedAt.Time
 	}
+
 	job.Error = jobError.String
+
 	return &job, nil
 }

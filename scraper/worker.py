@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 
@@ -11,7 +11,6 @@ from scraper.matching import assess_price_risk, deduplicate_offers, enrich_and_f
 from scraper.models import Offer, PerfumeTarget
 from scraper.openrouter_search import search_offers as openrouter_search_offers
 from scraper.stores.registry import build_stores
-
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -24,9 +23,9 @@ class Worker:
         self.ttl_hours = int(os.getenv("OFFER_CACHE_TTL_HOURS", "8"))
         enabled = {
             value.strip()
-            for value in os.getenv(
-                "SCRAPER_STORES", "Ozon,ЛЭТУАЛЬ,Золотое Яблоко,Рандеву"
-            ).split(",")
+            for value in os.getenv("SCRAPER_STORES", "Ozon,ЛЭТУАЛЬ,Золотое Яблоко,Рандеву").split(
+                ","
+            )
             if value.strip()
         }
         self.stores = build_stores(enabled)
@@ -91,7 +90,7 @@ class Worker:
                 *(store.search(target) for store in self.stores),
                 return_exceptions=True,
             )
-            for store, result in zip(self.stores, results):
+            for store, result in zip(self.stores, results, strict=False):
                 if isinstance(result, Exception):
                     logger.warning("Store %s failed: %s", store.name, result)
                     store_errors.append(f"{store.name}: {result}")
@@ -122,14 +121,13 @@ class Worker:
                 self.fail_job(conn, job_id, str(exc))
 
     def save(self, job_id: int, perfume_id: int, offers: list[Offer]) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(hours=self.ttl_hours)
-        with psycopg.connect(self.database_url) as conn:
-            with conn.transaction():
-                conn.execute("DELETE FROM store_offers WHERE perfume_id = %s", (perfume_id,))
-                for offer in offers:
-                    conn.execute(
-                        """
+        with psycopg.connect(self.database_url) as conn, conn.transaction():
+            conn.execute("DELETE FROM store_offers WHERE perfume_id = %s", (perfume_id,))
+            for offer in offers:
+                conn.execute(
+                    """
                         INSERT INTO store_offers (
                             perfume_id, search_job_id, store, seller, title, price, old_price,
                             currency, volume_ml, concentration, product_type, in_stock, url,
@@ -140,22 +138,38 @@ class Worker:
                             %s, %s, %s, %s, %s, %s, %s, %s
                         )
                         """,
-                        (
-                            perfume_id, job_id, offer.store, offer.seller, offer.title,
-                            offer.price, offer.old_price, offer.currency, offer.volume_ml,
-                            offer.concentration, offer.product_type, offer.in_stock, offer.url,
-                            offer.rating, offer.reviews_count, offer.match_confidence,
-                            offer.risk_level, offer.risk_score, offer.comment, now, expires_at,
-                        ),
-                    )
-                conn.execute(
-                    """
+                    (
+                        perfume_id,
+                        job_id,
+                        offer.store,
+                        offer.seller,
+                        offer.title,
+                        offer.price,
+                        offer.old_price,
+                        offer.currency,
+                        offer.volume_ml,
+                        offer.concentration,
+                        offer.product_type,
+                        offer.in_stock,
+                        offer.url,
+                        offer.rating,
+                        offer.reviews_count,
+                        offer.match_confidence,
+                        offer.risk_level,
+                        offer.risk_score,
+                        offer.comment,
+                        now,
+                        expires_at,
+                    ),
+                )
+            conn.execute(
+                """
                     UPDATE offer_search_jobs
                     SET status = 'completed', completed_at = NOW(), updated_at = NOW(), error = NULL
                     WHERE id = %s
                     """,
-                    (job_id,),
-                )
+                (job_id,),
+            )
 
     @staticmethod
     def fail_job(conn: psycopg.Connection, job_id: int, error: str) -> None:

@@ -2,7 +2,6 @@
 package http
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/merkulovlad/nuhach/internal/usecase"
@@ -70,24 +69,4 @@ func (h *Handler) HealthCheck(c *fiber.Ctx) error {
 		"status":    "ok",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	})
-}
-
-// parseIntParam parses an integer query parameter.
-func parseIntParam(c *fiber.Ctx, name string, defaultValue int) int {
-	val := c.Query(name)
-	if val == "" {
-		return defaultValue
-	}
-	intVal, err := strconv.Atoi(val)
-	if err != nil {
-		return defaultValue
-	}
-	return intVal
-}
-
-// parseTgID parses the tg_id path parameter.
-func parseTgID(c *fiber.Ctx) int64 {
-	tgIDStr := c.Params("tg_id")
-	tgID, _ := strconv.ParseInt(tgIDStr, 10, 64)
-	return tgID
 }

@@ -1,31 +1,29 @@
 """
 Telegram bot command and callback handlers.
 """
+
 import asyncio
 import logging
-from typing import Optional, List
 
-from aiogram import Bot, Dispatcher, Router, F
-from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, CallbackQuery
+from aiogram import F, Router
 from aiogram.enums import ParseMode
+from aiogram.filters import Command, CommandStart
+from aiogram.types import CallbackQuery, Message
 
-from .api_client import APIClient, APIError, PerfumeItem
-from .state import state_manager
+from .api_client import APIClient, APIError
 from .formatters import (
-    format_perfume_list,
-    format_perfume_details,
-    format_perfume_card,
     format_error_message,
+    format_perfume_details,
+    format_perfume_list,
     format_store_offers,
 )
 from .keyboards import (
-    build_perfume_keyboard,
-    build_perfume_list_keyboard,
     build_detail_keyboard,
     build_offers_keyboard,
+    build_perfume_list_keyboard,
     parse_callback_data,
 )
+from .state import state_manager
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,7 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # API client will be set during bot initialization
-api_client: Optional[APIClient] = None
+api_client: APIClient | None = None
 
 # Vector search flag
 _enable_vector_search: bool = False
@@ -53,12 +51,13 @@ def set_vector_search_enabled(enabled: bool) -> None:
         logger.info("Vector search enabled")
 
 
-def _get_query_embedding(query: str) -> Optional[List[float]]:
+def _get_query_embedding(query: str) -> list[float] | None:
     """Get embedding for search query if vector search is enabled."""
     if not _enable_vector_search:
         return None
     try:
         from .embedding import embed_query
+
         return embed_query(query)
     except Exception as e:
         logger.warning("Failed to get query embedding: %s", e)
@@ -75,6 +74,7 @@ def get_tg_id(message_or_callback) -> int:
 # ============================================================================
 # Command Handlers
 # ============================================================================
+
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
@@ -121,51 +121,46 @@ async def cmd_search(message: Message) -> None:
     if api_client is None:
         await message.answer(format_error_message("api_unavailable"))
         return
-    
+
     # Extract query from message
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
         await message.answer(format_error_message("no_query"), parse_mode=ParseMode.HTML)
         return
-    
+
     query = parts[1].strip()
     if not query:
         await message.answer(format_error_message("no_query"), parse_mode=ParseMode.HTML)
         return
-    
+
     tg_id = get_tg_id(message)
-    
+
     # Send "searching" message
     status_msg = await message.answer("🔍 Searching...")
-    
+
     try:
         # Try to get query embedding for semantic search
         embedding = _get_query_embedding(query)
-        
-        result = await api_client.search(
-            query=query, 
-            limit=10, 
-            tg_id=tg_id,
-            embedding=embedding
-        )
-        
+
+        result = await api_client.search(query=query, limit=10, tg_id=tg_id, embedding=embedding)
+
         if not result.items:
             await status_msg.edit_text(format_error_message("no_results"))
             return
-        
+
         # Save state for event logging
         perfume_ids = [p.id for p in result.items]
         state_manager.set_last_request(tg_id, result.request_id, perfume_ids)
-        
+
         # Log impressions
         await api_client.log_impression(tg_id, perfume_ids, result.request_id)
-        
+
         # Format and send results
         text = format_perfume_list(result.items, title=f"🔍 Search: {query}")
         keyboard = build_perfume_list_keyboard(result.items)
-        
+
         await status_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        
+
     except APIError as e:
         logger.error("Search API error: %s", e)
         await status_msg.edit_text(format_error_message("api_unavailable"))
@@ -180,35 +175,35 @@ async def cmd_recommend(message: Message) -> None:
     if api_client is None:
         await message.answer(format_error_message("api_unavailable"))
         return
-    
+
     tg_id = get_tg_id(message)
-    
+
     status_msg = await message.answer("🎯 Getting recommendations...")
-    
+
     try:
         result = await api_client.get_recommendations(tg_id=tg_id, limit=10)
-        
+
         if not result.items:
             await status_msg.edit_text(format_error_message("no_recommendations"))
             return
-        
+
         # Save state for event logging
         perfume_ids = [p.id for p in result.items]
         state_manager.set_last_request(tg_id, result.request_id, perfume_ids)
-        
+
         # Log impressions
         await api_client.log_impression(tg_id, perfume_ids, result.request_id)
-        
+
         # Format results
         title = "🎯 Recommendations for you"
         if result.exploration_ids:
             title += f" (🔮 exploring: {len(result.exploration_ids)})"
-        
+
         text = format_perfume_list(result.items, title=title)
         keyboard = build_perfume_list_keyboard(result.items)
-        
+
         await status_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        
+
     except APIError as e:
         logger.error("Recommendations API error: %s", e)
         await status_msg.edit_text(format_error_message("api_unavailable"))
@@ -223,23 +218,23 @@ async def cmd_saves(message: Message) -> None:
     if api_client is None:
         await message.answer(format_error_message("api_unavailable"))
         return
-    
+
     tg_id = get_tg_id(message)
-    
+
     status_msg = await message.answer("💾 Loading saves...")
-    
+
     try:
         saves = await api_client.get_saves(tg_id)
-        
+
         if not saves:
             await status_msg.edit_text(format_error_message("no_saves"))
             return
-        
+
         text = format_perfume_list(saves, title="💾 Your saved perfumes")
         keyboard = build_perfume_list_keyboard(saves)
-        
+
         await status_msg.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        
+
     except APIError as e:
         logger.error("Saves API error: %s", e)
         await status_msg.edit_text(format_error_message("api_unavailable"))
@@ -251,6 +246,7 @@ async def cmd_saves(message: Message) -> None:
 # ============================================================================
 # Callback Handlers
 # ============================================================================
+
 
 @router.callback_query(F.data.startswith("select:"))
 async def callback_select(callback: CallbackQuery) -> None:
@@ -264,11 +260,11 @@ async def callback_details(callback: CallbackQuery) -> None:
     if api_client is None:
         await callback.answer("Service unavailable", show_alert=True)
         return
-    
+
     _, perfume_id = parse_callback_data(callback.data)
     tg_id = get_tg_id(callback)
     request_id = state_manager.get_last_request_id(tg_id)
-    
+
     # Log click event
     await api_client.create_event(
         tg_id=tg_id,
@@ -276,22 +272,20 @@ async def callback_details(callback: CallbackQuery) -> None:
         event_type="click",
         request_id=request_id,
     )
-    
+
     try:
         perfume = await api_client.get_perfume(perfume_id)
-        
+
         if perfume is None:
             await callback.answer("Perfume not found", show_alert=True)
             return
-        
+
         text = format_perfume_details(perfume)
         keyboard = build_detail_keyboard(perfume_id)
-        
-        await callback.message.edit_text(
-            text, parse_mode=ParseMode.HTML, reply_markup=keyboard
-        )
+
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error("Details error: %s", e)
         await callback.answer("Failed to load details", show_alert=True)
@@ -303,32 +297,30 @@ async def callback_similar(callback: CallbackQuery) -> None:
     if api_client is None:
         await callback.answer("Service unavailable", show_alert=True)
         return
-    
+
     _, perfume_id = parse_callback_data(callback.data)
     tg_id = get_tg_id(callback)
-    
+
     try:
         result = await api_client.get_similar(perfume_id=perfume_id, limit=10, tg_id=tg_id)
-        
+
         if not result.items:
             await callback.answer("No similar perfumes found", show_alert=True)
             return
-        
+
         # Save state for event logging
         perfume_ids = [p.id for p in result.items]
         state_manager.set_last_request(tg_id, result.request_id, perfume_ids)
-        
+
         # Log impressions
         await api_client.log_impression(tg_id, perfume_ids, result.request_id)
-        
+
         text = format_perfume_list(result.items, title="🔄 Similar perfumes")
         keyboard = build_perfume_list_keyboard(result.items)
-        
-        await callback.message.edit_text(
-            text, parse_mode=ParseMode.HTML, reply_markup=keyboard
-        )
+
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error("Similar error: %s", e)
         await callback.answer("Failed to load similar perfumes", show_alert=True)
@@ -392,18 +384,18 @@ async def callback_like(callback: CallbackQuery) -> None:
     if api_client is None:
         await callback.answer("Service unavailable", show_alert=True)
         return
-    
+
     _, perfume_id = parse_callback_data(callback.data)
     tg_id = get_tg_id(callback)
     request_id = state_manager.get_last_request_id(tg_id)
-    
+
     success = await api_client.create_event(
         tg_id=tg_id,
         perfume_id=perfume_id,
         event_type="like",
         request_id=request_id,
     )
-    
+
     if success:
         await callback.answer("👍 Liked! This will improve your recommendations.")
     else:
@@ -416,18 +408,18 @@ async def callback_dislike(callback: CallbackQuery) -> None:
     if api_client is None:
         await callback.answer("Service unavailable", show_alert=True)
         return
-    
+
     _, perfume_id = parse_callback_data(callback.data)
     tg_id = get_tg_id(callback)
     request_id = state_manager.get_last_request_id(tg_id)
-    
+
     success = await api_client.create_event(
         tg_id=tg_id,
         perfume_id=perfume_id,
         event_type="dislike",
         request_id=request_id,
     )
-    
+
     if success:
         await callback.answer("👎 Noted. We'll show you less like this.")
     else:
@@ -440,18 +432,18 @@ async def callback_save(callback: CallbackQuery) -> None:
     if api_client is None:
         await callback.answer("Service unavailable", show_alert=True)
         return
-    
+
     _, perfume_id = parse_callback_data(callback.data)
     tg_id = get_tg_id(callback)
     request_id = state_manager.get_last_request_id(tg_id)
-    
+
     success = await api_client.create_event(
         tg_id=tg_id,
         perfume_id=perfume_id,
         event_type="save",
         request_id=request_id,
     )
-    
+
     if success:
         await callback.answer("💾 Saved! View your saves with /saves")
     else:
@@ -463,31 +455,28 @@ async def callback_back(callback: CallbackQuery) -> None:
     """Handle Back button - show recommendations."""
     # For simplicity, show recommendations on back
     await callback.answer()
-    
+
     # Create a fake message to reuse cmd_recommend
     if api_client is None:
         await callback.answer("Service unavailable", show_alert=True)
         return
-    
+
     tg_id = get_tg_id(callback)
-    
+
     try:
         result = await api_client.get_recommendations(tg_id=tg_id, limit=10)
-        
+
         if result.items:
             perfume_ids = [p.id for p in result.items]
             state_manager.set_last_request(tg_id, result.request_id, perfume_ids)
-            
+
             text = format_perfume_list(result.items, title="🎯 Recommendations for you")
             keyboard = build_perfume_list_keyboard(result.items)
-            
-            await callback.message.edit_text(
-                text, parse_mode=ParseMode.HTML, reply_markup=keyboard
-            )
+
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
         else:
             await callback.message.edit_text(
-                "Use /search to find perfumes!",
-                parse_mode=ParseMode.HTML
+                "Use /search to find perfumes!", parse_mode=ParseMode.HTML
             )
     except Exception as e:
         logger.error("Back button error: %s", e)

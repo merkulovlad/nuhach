@@ -38,7 +38,12 @@ func NewSearchUseCase(
 
 // Search performs a search and logs impressions.
 // Uses OpenSearch BM25 as primary, falls back to PostgreSQL full-text search if no results.
-func (uc *SearchUseCase) Search(ctx context.Context, query string, limit, offset int, tgID *int64) (*domain.SearchResult, error) {
+func (uc *SearchUseCase) Search(
+	ctx context.Context,
+	query string,
+	limit, offset int,
+	tgID *int64,
+) (*domain.SearchResult, error) {
 	// Perform search using OpenSearch
 	cards, total, err := uc.searchRepo.Search(ctx, query, limit, offset)
 	if err != nil {
@@ -56,6 +61,7 @@ func (uc *SearchUseCase) Search(ctx context.Context, query string, limit, offset
 	if len(cards) == 0 {
 		uc.logger.Info("OpenSearch returned no results, trying PostgreSQL full-text search",
 			zap.String("query", query))
+
 		cards, total, err = uc.perfumeRepo.FullTextSearch(ctx, query, limit, offset)
 		if err != nil {
 			uc.logger.Warn("PostgreSQL full-text search also failed", zap.Error(err))
@@ -72,11 +78,13 @@ func (uc *SearchUseCase) Search(ctx context.Context, query string, limit, offset
 			uc.logger.Warn("failed to get/create user for impression logging", zap.Error(err))
 		} else {
 			ids := make([]int64, len(cards))
+
 			ranks := make([]int, len(cards))
 			for i, card := range cards {
 				ids[i] = card.ID
 				ranks[i] = offset + i + 1
 			}
+
 			err = uc.eventRepo.CreateImpressionLog(ctx, &domain.ImpressionLog{
 				UserID:     user.ID,
 				RequestID:  requestID,
@@ -103,11 +111,19 @@ func (uc *SearchUseCase) GetPerfumeByID(ctx context.Context, id int64) (*domain.
 }
 
 // GetSimilarPerfumes retrieves similar perfumes using pgvector.
-func (uc *SearchUseCase) GetSimilarPerfumes(ctx context.Context, perfumeID int64, limit int, tgID *int64) (*domain.SearchResult, error) {
-	var excludeIDs []int64
-	var userID int64
+func (uc *SearchUseCase) GetSimilarPerfumes(
+	ctx context.Context,
+	perfumeID int64,
+	limit int,
+	tgID *int64,
+) (*domain.SearchResult, error) {
+	var (
+		excludeIDs []int64
+		userID     int64
+	)
 
 	// Get excluded IDs if user is provided
+
 	if tgID != nil {
 		user, err := uc.userRepo.GetOrCreate(ctx, *tgID)
 		if err == nil {
@@ -131,6 +147,7 @@ func (uc *SearchUseCase) GetSimilarPerfumes(ctx context.Context, perfumeID int64
 	// Convert to cards
 	cards := make([]domain.PerfumeCard, len(perfumes))
 	ids := make([]int64, len(perfumes))
+
 	ranks := make([]int, len(perfumes))
 	for i, p := range perfumes {
 		cards[i] = perfumeToCard(p.Perfume)
@@ -177,17 +194,25 @@ func perfumeToCard(p domain.Perfume) domain.PerfumeCard {
 	} else {
 		card.Notes = p.NotesEN
 	}
+
 	if p.AccordsEN != "" {
 		card.Accords = p.AccordsEN
 	} else {
 		card.Accords = p.AccordsRU
 	}
+
 	return card
 }
 
 // VectorSearch performs hybrid search combining semantic and BM25 results.
 // Uses Reciprocal Rank Fusion (RRF) to merge rankings from both approaches.
-func (uc *SearchUseCase) VectorSearch(ctx context.Context, query string, embedding []float32, limit, offset int, tgID *int64) (*domain.SearchResult, error) {
+func (uc *SearchUseCase) VectorSearch(
+	ctx context.Context,
+	query string,
+	embedding []float32,
+	limit, offset int,
+	tgID *int64,
+) (*domain.SearchResult, error) {
 	// Fetch more candidates from each source for better fusion
 	candidateLimit := limit * 3
 
@@ -224,11 +249,13 @@ func (uc *SearchUseCase) VectorSearch(ctx context.Context, query string, embeddi
 			uc.logger.Warn("failed to get/create user for impression logging", zap.Error(err))
 		} else {
 			ids := make([]int64, len(cards))
+
 			ranks := make([]int, len(cards))
 			for i, card := range cards {
 				ids[i] = card.ID
 				ranks[i] = offset + i + 1
 			}
+
 			err = uc.eventRepo.CreateImpressionLog(ctx, &domain.ImpressionLog{
 				UserID:     user.ID,
 				RequestID:  requestID,
@@ -251,7 +278,10 @@ func (uc *SearchUseCase) VectorSearch(ctx context.Context, query string, embeddi
 
 // mergeWithRRF combines results using Reciprocal Rank Fusion.
 // RRF score = sum(1 / (k + rank)) where k=60 is standard constant.
-func (uc *SearchUseCase) mergeWithRRF(vectorCards, textCards []domain.PerfumeCard, limit, offset int) []domain.PerfumeCard {
+func (uc *SearchUseCase) mergeWithRRF(
+	vectorCards, textCards []domain.PerfumeCard,
+	limit, offset int,
+) []domain.PerfumeCard {
 	const k = 60.0
 
 	// Calculate RRF scores
@@ -277,6 +307,7 @@ func (uc *SearchUseCase) mergeWithRRF(vectorCards, textCards []domain.PerfumeCar
 		id    int64
 		score float64
 	}
+
 	sorted := make([]scoredCard, 0, len(scores))
 	for id, score := range scores {
 		sorted = append(sorted, scoredCard{id: id, score: score})
@@ -296,6 +327,7 @@ func (uc *SearchUseCase) mergeWithRRF(vectorCards, textCards []domain.PerfumeCar
 	if start >= len(sorted) {
 		return []domain.PerfumeCard{}
 	}
+
 	end := start + limit
 	if end > len(sorted) {
 		end = len(sorted)

@@ -95,6 +95,7 @@ func BuildSearchQuery(query string, limit, offset int) ([]byte, error) {
 		"from": offset,
 		"size": limit,
 	}
+
 	return json.Marshal(searchQuery)
 }
 
@@ -143,19 +144,24 @@ func mapHitToCard(source map[string]interface{}) domain.PerfumeCard {
 	if v, ok := source["id"].(float64); ok {
 		card.ID = int64(v)
 	}
+
 	if v, ok := source["name"].(string); ok {
 		card.Name = v
 	}
+
 	if v, ok := source["brand_en"].(string); ok {
 		card.Brand = v
 	}
+
 	if v, ok := source["rating_value"].(float64); ok {
 		card.RatingValue = &v
 	}
+
 	if v, ok := source["rating_count"].(float64); ok {
 		i := int(v)
 		card.RatingCount = &i
 	}
+
 	if v, ok := source["year"].(float64); ok {
 		i := int(v)
 		card.Year = &i
@@ -167,6 +173,7 @@ func mapHitToCard(source map[string]interface{}) domain.PerfumeCard {
 	} else if v, ok := source["notes_en"].(string); ok {
 		card.Notes = truncateString(v, 100)
 	}
+
 	if v, ok := source["accords_en"].(string); ok && v != "" {
 		card.Accords = truncateString(v, 80)
 	} else if v, ok := source["accords_ru"].(string); ok {
@@ -186,13 +193,18 @@ func truncateString(s string, maxLen int) string {
 	if idx := strings.LastIndex(truncated, ","); idx > maxLen/2 {
 		return truncated[:idx]
 	}
+
 	return truncated + "..."
 }
 
 // VectorSearch performs semantic search using embeddings (placeholder).
 // For actual vector search, we need query embeddings from an embedding service.
 // This implementation returns empty results - the use case layer handles fallback.
-func (r *SearchRepo) VectorSearch(ctx context.Context, queryEmbedding []float32, limit, offset int) ([]domain.PerfumeCard, int64, error) {
+func (r *SearchRepo) VectorSearch(
+	ctx context.Context,
+	queryEmbedding []float32,
+	limit, offset int,
+) ([]domain.PerfumeCard, int64, error) {
 	// This would require query embedding generation.
 	// For now, this is a placeholder that the use case can call with pre-computed embeddings.
 	r.logger.Debug("VectorSearch called", zap.Int("embeddingLen", len(queryEmbedding)))

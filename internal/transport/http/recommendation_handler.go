@@ -36,6 +36,7 @@ func (h *Handler) GetRecommendations(c *fiber.Ctx) error {
 	result, err := h.recsUC.GetRecommendations(c.Context(), tgID, limit)
 	if err != nil {
 		h.logger.Error("Failed to get recommendations", zap.Error(err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to get recommendations",
 		})

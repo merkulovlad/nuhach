@@ -8,11 +8,10 @@ ingest-embeddings Docker Compose service.
 
 import argparse
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional
 
 import pandas as pd
-
 
 DEFAULT_INPUT = Path("data/processed/dataset_final.csv")
 DEFAULT_OUTPUT = Path("data/processed/perfumes_with_embeddings.parquet")
@@ -99,7 +98,7 @@ def encode_texts(
     model_name: str,
     device: str,
     batch_size: int,
-    prefix: Optional[str] = None,
+    prefix: str | None = None,
 ) -> list[list[float]]:
     from sentence_transformers import SentenceTransformer
 
@@ -124,7 +123,7 @@ def build_embeddings(
     *,
     batch_size: int,
     device: str,
-    limit: Optional[int],
+    limit: int | None,
     force: bool,
     search_model: str,
     rec_model: str,
@@ -183,12 +182,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create embeddings parquet for ingest-embeddings.")
     parser.add_argument("--csv", type=Path, default=DEFAULT_INPUT, help="Input dataset CSV path.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output parquet path.")
-    parser.add_argument("--batch-size", type=int, default=32, help="SentenceTransformer batch size.")
+    parser.add_argument(
+        "--batch-size", type=int, default=32, help="SentenceTransformer batch size."
+    )
     parser.add_argument("--device", default="auto", help="Device: auto, cpu, cuda, mps.")
     parser.add_argument("--limit", type=int, default=None, help="Limit rows for a smoke test.")
     parser.add_argument("--force", action="store_true", help="Overwrite existing output file.")
-    parser.add_argument("--search-model", default=DEFAULT_SEARCH_MODEL, help="Search embedding model.")
-    parser.add_argument("--rec-model", default=DEFAULT_REC_MODEL, help="Recommendation embedding model.")
+    parser.add_argument(
+        "--search-model", default=DEFAULT_SEARCH_MODEL, help="Search embedding model."
+    )
+    parser.add_argument(
+        "--rec-model", default=DEFAULT_REC_MODEL, help="Recommendation embedding model."
+    )
     return parser.parse_args()
 
 

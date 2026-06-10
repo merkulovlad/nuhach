@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -20,14 +19,14 @@ class Offer:
     price: float
     url: str
     seller: str = ""
-    old_price: Optional[float] = None
+    old_price: float | None = None
     currency: str = "RUB"
-    volume_ml: Optional[int] = None
+    volume_ml: int | None = None
     concentration: str = ""
     product_type: str = ""
     in_stock: bool = True
-    rating: Optional[float] = None
-    reviews_count: Optional[int] = None
+    rating: float | None = None
+    reviews_count: int | None = None
     match_confidence: float = 0.0
     risk_level: str = "unknown"
     risk_score: float = 0.0

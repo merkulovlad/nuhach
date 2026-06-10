@@ -35,11 +35,15 @@ func RecoveryMiddleware(logger *zap.Logger) fiber.Handler {
 					zap.Any("panic", r),
 					zap.String("path", c.Path()),
 				)
-				c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+
+				if err := c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"error": "internal server error",
-				})
+				}); err != nil {
+					logger.Error("Failed to write panic response", zap.Error(err))
+				}
 			}
 		}()
+
 		return c.Next()
 	}
 }

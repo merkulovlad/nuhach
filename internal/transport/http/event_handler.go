@@ -61,10 +61,12 @@ func (h *Handler) CreateEvent(c *fiber.Ctx) error {
 		saves, err := h.eventUC.GetUserSaves(c.Context(), tgID)
 		if err != nil {
 			h.logger.Error("Failed to get user saves", zap.Error(err))
+
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "failed to get user saves",
 			})
 		}
+
 		return c.JSON(fiber.Map{
 			"items": saves,
 		})
@@ -85,6 +87,7 @@ func (h *Handler) CreateEvent(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		h.logger.Error("Failed to create event", zap.Error(err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create event",
 		})
@@ -107,6 +110,7 @@ func (h *Handler) GetUserSaves(c *fiber.Ctx) error {
 	saves, err := h.eventUC.GetUserSaves(c.Context(), tgID)
 	if err != nil {
 		h.logger.Error("Failed to get user saves", zap.Error(err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to get user saves",
 		})

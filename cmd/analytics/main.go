@@ -19,8 +19,13 @@ import (
 
 func main() {
 	// Flags
-	date := flag.String("date", time.Now().AddDate(0, 0, -1).Format("2006-01-02"), "Date to compute metrics for (YYYY-MM-DD)")
+	date := flag.String(
+		"date",
+		time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+		"Date to compute metrics for (YYYY-MM-DD)",
+	)
 	surface := flag.String("surface", "", "Surface to compute metrics for (search, recommendations, or empty for all)")
+
 	flag.Parse()
 
 	// Initialize logger
@@ -112,9 +117,11 @@ func printMetricsSummary(ctx context.Context, database *sql.DB, date string) {
 	fmt.Println(strings.Repeat("-", 80))
 
 	for rows.Next() {
-		var surface string
-		var ctr, precisionK, coverage, novelty float64
-		var impressions, clicks int64
+		var (
+			surface                            string
+			ctr, precisionK, coverage, novelty float64
+			impressions, clicks                int64
+		)
 
 		if err := rows.Scan(&surface, &ctr, &precisionK, &coverage, &novelty, &impressions, &clicks); err != nil {
 			continue

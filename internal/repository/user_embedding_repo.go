@@ -26,8 +26,10 @@ func NewUserEmbeddingRepo(db *sql.DB, logger *zap.Logger, embeddingDim int) *Use
 
 // Get retrieves the user embedding.
 func (r *UserEmbeddingRepo) Get(ctx context.Context, userID int64) (*domain.UserEmbedding, error) {
-	var emb domain.UserEmbedding
-	var vec pgvector.Vector
+	var (
+		emb domain.UserEmbedding
+		vec pgvector.Vector
+	)
 
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, user_id, embedding, n_interactions, version, created_at, updated_at
@@ -38,6 +40,7 @@ func (r *UserEmbeddingRepo) Get(ctx context.Context, userID int64) (*domain.User
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get user embedding: %w", err)
 	}
 
@@ -56,6 +59,7 @@ func (r *UserEmbeddingRepo) Upsert(ctx context.Context, emb *domain.UserEmbeddin
 	}
 
 	now := time.Now()
+
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO user_embeddings (user_id, embedding, n_interactions, version, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $5)

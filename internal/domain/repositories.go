@@ -22,7 +22,12 @@ type PerfumeRepository interface {
 	GetSimilar(ctx context.Context, perfumeID int64, limit int, excludeIDs []int64) ([]PerfumeWithEmbedding, error)
 
 	// GetCandidatesForUser retrieves recommendation candidates using user embedding.
-	GetCandidatesForUser(ctx context.Context, userEmbedding []float32, limit int, excludeIDs []int64) ([]PerfumeWithEmbedding, error)
+	GetCandidatesForUser(
+		ctx context.Context,
+		userEmbedding []float32,
+		limit int,
+		excludeIDs []int64,
+	) ([]PerfumeWithEmbedding, error)
 
 	// GetEmbeddingByPerfumeID retrieves the embedding for a specific perfume.
 	GetEmbeddingByPerfumeID(ctx context.Context, perfumeID int64) ([]float32, error)
@@ -88,10 +93,10 @@ type EventRepository interface {
 // AnalyticsRepository defines operations for analytics computation.
 type AnalyticsRepository interface {
 	// ComputeDailyMetrics computes and stores daily metrics.
-	ComputeDailyMetrics(ctx context.Context, date string, surface string) (*AnalyticsMetrics, error)
+	ComputeDailyMetrics(ctx context.Context, date, surface string) (*AnalyticsMetrics, error)
 
 	// GetMetrics retrieves metrics for a date range.
-	GetMetrics(ctx context.Context, startDate, endDate string, surface string) ([]AnalyticsMetrics, error)
+	GetMetrics(ctx context.Context, startDate, endDate, surface string) ([]AnalyticsMetrics, error)
 
 	// StoreDailyMetrics stores computed metrics.
 	StoreDailyMetrics(ctx context.Context, metrics *AnalyticsMetrics) error

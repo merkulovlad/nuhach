@@ -35,6 +35,7 @@ func NewEventUseCase(
 	if embeddingDecay <= 0 || embeddingDecay > 1 {
 		embeddingDecay = 0.95
 	}
+
 	return &EventUseCase{
 		userRepo:          userRepo,
 		userEmbeddingRepo: userEmbeddingRepo,
@@ -98,6 +99,7 @@ func eventEmbeddingWeight(t domain.EventType, rating *int) float64 {
 		if rating != nil {
 			return float64(*rating) / 5.0
 		}
+
 		return 1.0
 	case domain.EventSave:
 		return 1.0
@@ -118,6 +120,7 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 	if err != nil {
 		return err
 	}
+
 	if perfumeEmb == nil {
 		uc.logger.Warn("no embedding found for perfume", zap.Int64("perfume_id", perfumeID))
 		return nil
@@ -135,9 +138,11 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 		if weight <= 0 {
 			return nil
 		}
+
 		newEmb := make([]float32, len(perfumeEmb))
 		copy(newEmb, perfumeEmb)
 		normalizeEmbedding(newEmb)
+
 		return uc.userEmbeddingRepo.Upsert(ctx, &domain.UserEmbedding{
 			UserID:        userID,
 			Embedding:     newEmb,
@@ -164,11 +169,14 @@ func (uc *EventUseCase) updateUserEmbedding(ctx context.Context, userID, perfume
 // caller should pass <1 in production.
 func mergeEmbedding(user, perfume []float32, weight, decay float64) []float32 {
 	out := make([]float32, len(user))
+
 	novelty := 1 - decay
 	for i := range out {
 		out[i] = float32(decay*float64(user[i]) + novelty*weight*float64(perfume[i]))
 	}
+
 	normalizeEmbedding(out)
+
 	return out
 }
 
@@ -188,6 +196,7 @@ func normalizeEmbedding(emb []float32) {
 	for _, v := range emb {
 		norm += float64(v) * float64(v)
 	}
+
 	norm = math.Sqrt(norm)
 	if norm > 0 {
 		for i := range emb {

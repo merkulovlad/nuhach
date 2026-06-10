@@ -32,5 +32,6 @@ func Connect(databaseURL string, logger *zap.Logger) (*sql.DB, error) {
 	}
 
 	logger.Info("Connected to PostgreSQL database")
+
 	return db, nil
 }

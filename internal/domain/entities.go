@@ -61,6 +61,7 @@ type UserEmbedding struct {
 // EventType represents types of user events.
 type EventType string
 
+// Supported user event types.
 const (
 	EventImpression EventType = "impression"
 	EventClick      EventType = "click"

@@ -1,8 +1,8 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import torch
-from transformers import MarianMTModel, MarianTokenizer
 from tqdm.auto import tqdm
+from transformers import MarianMTModel, MarianTokenizer
 from transliterate import translit
 
 
@@ -10,9 +10,7 @@ def clean_from_unknown(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
     df = df.copy()
     """Removes rows with 'unknown' values in the given column by setting them to NaN."""
     df[column_name] = df[column_name].apply(
-        lambda x: np.nan
-        if pd.isna(x) or str(x).strip().lower() == "unknown"
-        else x
+        lambda x: np.nan if pd.isna(x) or str(x).strip().lower() == "unknown" else x
     )
     return df
 
@@ -41,10 +39,16 @@ def translate_dataset_to_ru(df: pd.DataFrame, batch_size: int = 16) -> pd.DataFr
 
     cols_to_translate = [
         # Do NOT include "Perfume" here — we skip semantic translation of names
-        "Brand", "Country",
-        "Top", "Middle", "Base",
-        "mainaccord1", "mainaccord2", "mainaccord3",
-        "mainaccord4", "mainaccord5",
+        "Brand",
+        "Country",
+        "Top",
+        "Middle",
+        "Base",
+        "mainaccord1",
+        "mainaccord2",
+        "mainaccord3",
+        "mainaccord4",
+        "mainaccord5",
     ]
 
     df = df.copy()
@@ -62,17 +66,17 @@ def translate_dataset_to_ru(df: pd.DataFrame, batch_size: int = 16) -> pd.DataFr
 
         total_batches = (len(unique_texts) + batch_size - 1) // batch_size
 
-        for i in tqdm(range(0, len(unique_texts), batch_size),
-                      desc=f"Translating {col}",
-                      total=total_batches):
-            batch = unique_texts[i:i+batch_size].tolist()
+        for i in tqdm(
+            range(0, len(unique_texts), batch_size), desc=f"Translating {col}", total=total_batches
+        ):
+            batch = unique_texts[i : i + batch_size].tolist()
             encoded = _tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
 
             with torch.no_grad():
                 generated = _model.generate(**encoded)
 
             decoded = _tokenizer.batch_decode(generated, skip_special_tokens=True)
-            translations.update(dict(zip(batch, decoded)))
+            translations.update(dict(zip(batch, decoded, strict=False)))
 
         df[col] = series.map(translations)
 
@@ -111,7 +115,7 @@ def perfume_to_ru(x: str) -> str:
         return x
 
     try:
-        return translit(x, 'ru')
+        return translit(x, "ru")
     except Exception:
         return x
 
@@ -151,5 +155,5 @@ def main():
     df_final.to_csv("../data/processed/dataset_final.csv", index=False, encoding="utf-8")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

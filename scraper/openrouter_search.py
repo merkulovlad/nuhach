@@ -1,14 +1,13 @@
+import asyncio
 import json
 import logging
 import os
 import re
-import asyncio
 from urllib.parse import urlsplit
 
 import httpx
 
 from .models import Offer, PerfumeTarget
-
 
 STORE_DOMAINS = {
     "Ozon": ("ozon.ru",),
@@ -38,7 +37,7 @@ async def search_offers(target: PerfumeTarget) -> list[Offer]:
         return_exceptions=True,
     )
     offers: list[Offer] = []
-    for store, result in zip(STORE_DOMAINS, results):
+    for store, result in zip(STORE_DOMAINS, results, strict=False):
         if isinstance(result, Exception):
             logger.warning("OpenRouter search for %s failed: %s", store, result)
             continue
@@ -84,10 +83,21 @@ async def _search_store(
                             "match_confidence": {"type": "number", "minimum": 0, "maximum": 1},
                         },
                         "required": [
-                            "store", "seller", "title", "price", "regular_price", "volume_ml",
-                            "price_access", "price_is_full",
-                            "installment_payment", "installment_count", "currency", "url",
-                            "in_stock", "is_match", "match_confidence"
+                            "store",
+                            "seller",
+                            "title",
+                            "price",
+                            "regular_price",
+                            "volume_ml",
+                            "price_access",
+                            "price_is_full",
+                            "installment_payment",
+                            "installment_count",
+                            "currency",
+                            "url",
+                            "in_stock",
+                            "is_match",
+                            "match_confidence",
                         ],
                         "additionalProperties": False,
                     },
@@ -151,7 +161,8 @@ async def _search_store(
     evidence_urls = {
         _canonical_url(annotation["url_citation"]["url"])
         for annotation in message.get("annotations", [])
-        if annotation.get("type") == "url_citation" and annotation.get("url_citation", {}).get("url")
+        if annotation.get("type") == "url_citation"
+        and annotation.get("url_citation", {}).get("url")
     }
 
     offers: list[Offer] = []

@@ -42,6 +42,7 @@ func TestComputeWeightedRating_WithValidData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rv := tt.ratingValue
 			rc := tt.ratingCount
+
 			result := usecase.ComputeWeightedRating(&rv, &rc, globalMean, bayesianM)
 			if math.Abs(result-tt.expected) > 0.01 {
 				t.Errorf("ComputeWeightedRating() = %v, want %v", result, tt.expected)
@@ -257,9 +258,11 @@ func TestMergeEmbedding_PositiveWeightPullsToward(t *testing.T) {
 	if got[1] <= 0 {
 		t.Errorf("expected positive y-component after positive-weight merge, got %v", got)
 	}
+
 	if got[0] <= 0 {
 		t.Errorf("expected positive x-component preserved, got %v", got)
 	}
+
 	norm := math.Sqrt(float64(got[0]*got[0] + got[1]*got[1]))
 	if math.Abs(norm-1.0) > 1e-5 {
 		t.Errorf("result not normalized, |v|=%v", norm)
@@ -308,6 +311,7 @@ func TestMergeEmbedding_HighDecayMovesLess(t *testing.T) {
 	if simSlow <= simFast {
 		t.Errorf("expected high-decay centroid to stay closer to original (slow=%v, fast=%v)", simSlow, simFast)
 	}
+
 	if simSlow < 0.99 {
 		t.Errorf("decay=0.99 moved centroid too much: cos=%v", simSlow)
 	}
@@ -377,9 +381,11 @@ func float64Ptr(f float64) *float64 {
 
 func assertFloat32SliceApprox(t *testing.T, got, want []float32, tolerance float64) {
 	t.Helper()
+
 	if len(got) != len(want) {
 		t.Fatalf("len(got) = %d, want %d", len(got), len(want))
 	}
+
 	for i := range got {
 		if math.Abs(float64(got[i]-want[i])) > tolerance {
 			t.Fatalf("got[%d] = %v, want %v", i, got[i], want[i])

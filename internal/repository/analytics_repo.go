@@ -23,7 +23,10 @@ func NewAnalyticsRepo(db *sql.DB, logger *zap.Logger) *AnalyticsRepo {
 }
 
 // ComputeDailyMetrics computes metrics for a specific date and surface.
-func (r *AnalyticsRepo) ComputeDailyMetrics(ctx context.Context, date string, surface string) (*domain.AnalyticsMetrics, error) {
+func (r *AnalyticsRepo) ComputeDailyMetrics(
+	ctx context.Context,
+	date, surface string,
+) (*domain.AnalyticsMetrics, error) {
 	metrics := &domain.AnalyticsMetrics{
 		Date:    date,
 		Surface: surface,
@@ -127,7 +130,10 @@ func (r *AnalyticsRepo) ComputeDailyMetrics(ctx context.Context, date string, su
 }
 
 // GetMetrics retrieves metrics for a date range.
-func (r *AnalyticsRepo) GetMetrics(ctx context.Context, startDate, endDate string, surface string) ([]domain.AnalyticsMetrics, error) {
+func (r *AnalyticsRepo) GetMetrics(
+	ctx context.Context,
+	startDate, endDate, surface string,
+) ([]domain.AnalyticsMetrics, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT date, surface, ctr, precision_k, recall_k, map_k, ndcg_k, 
 		       coverage, diversity, novelty, impressions, clicks
@@ -141,13 +147,16 @@ func (r *AnalyticsRepo) GetMetrics(ctx context.Context, startDate, endDate strin
 	defer rows.Close()
 
 	var metrics []domain.AnalyticsMetrics
+
 	for rows.Next() {
 		var m domain.AnalyticsMetrics
+
 		err := rows.Scan(&m.Date, &m.Surface, &m.CTR, &m.PrecisionK, &m.RecallK, &m.MAPK, &m.NDCGK,
 			&m.Coverage, &m.Diversity, &m.Novelty, &m.Impressions, &m.Clicks)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan metrics: %w", err)
 		}
+
 		metrics = append(metrics, m)
 	}
 
@@ -170,5 +179,6 @@ func (r *AnalyticsRepo) StoreDailyMetrics(ctx context.Context, metrics *domain.A
 	if err != nil {
 		return fmt.Errorf("failed to store metrics: %w", err)
 	}
+
 	return nil
 }

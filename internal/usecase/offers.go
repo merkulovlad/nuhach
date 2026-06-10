@@ -10,6 +10,7 @@ import (
 	"github.com/merkulovlad/nuhach/internal/domain"
 )
 
+// ErrPerfumeNotFound indicates that an offer search target does not exist.
 var ErrPerfumeNotFound = errors.New("perfume not found")
 
 // OfferUseCase coordinates cached results and demand-driven scraper jobs.
@@ -21,6 +22,7 @@ type OfferUseCase struct {
 	failureTTL  time.Duration
 }
 
+// NewOfferUseCase creates an offer search use case.
 func NewOfferUseCase(perfumeRepo domain.PerfumeRepository, offerRepo domain.OfferRepository) *OfferUseCase {
 	return &OfferUseCase{
 		perfumeRepo: perfumeRepo,
@@ -31,13 +33,16 @@ func NewOfferUseCase(perfumeRepo domain.PerfumeRepository, offerRepo domain.Offe
 	}
 }
 
+// Get returns cached offers and the latest search status.
 func (uc *OfferUseCase) Get(ctx context.Context, perfumeID int64) (*domain.OfferSearchResult, error) {
 	if err := uc.ensurePerfume(ctx, perfumeID); err != nil {
 		return nil, err
 	}
+
 	return uc.buildResult(ctx, perfumeID)
 }
 
+// Search queues an offer refresh when needed and returns the current result.
 func (uc *OfferUseCase) Search(ctx context.Context, perfumeID int64, force bool) (*domain.OfferSearchResult, error) {
 	if err := uc.ensurePerfume(ctx, perfumeID); err != nil {
 		return nil, err
@@ -47,6 +52,7 @@ func (uc *OfferUseCase) Search(ctx context.Context, perfumeID int64, force bool)
 	if err != nil {
 		return nil, err
 	}
+
 	if !force && (result.Status == "ready" || result.Status == "failed") {
 		return result, nil
 	}
@@ -55,13 +61,16 @@ func (uc *OfferUseCase) Search(ctx context.Context, perfumeID int64, force bool)
 	if err != nil {
 		return nil, fmt.Errorf("queue offer search: %w", err)
 	}
+
 	result.JobID = &job.ID
 	if len(result.Offers) > 0 {
 		result.Status = "refreshing"
 	} else {
 		result.Status = "searching"
 	}
+
 	result.Error = ""
+
 	return result, nil
 }
 
@@ -70,9 +79,11 @@ func (uc *OfferUseCase) ensurePerfume(ctx context.Context, perfumeID int64) erro
 	if err != nil {
 		return fmt.Errorf("get perfume: %w", err)
 	}
+
 	if perfume == nil {
 		return ErrPerfumeNotFound
 	}
+
 	return nil
 }
 
@@ -81,6 +92,7 @@ func (uc *OfferUseCase) buildResult(ctx context.Context, perfumeID int64) (*doma
 	if err != nil {
 		return nil, err
 	}
+
 	job, err := uc.offerRepo.GetLatestJob(ctx, perfumeID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
@@ -91,18 +103,23 @@ func (uc *OfferUseCase) buildResult(ctx context.Context, perfumeID int64) (*doma
 		latestChecked := offers[0].CheckedAt
 		latestExpiry := offers[0].ExpiresAt
 		fresh := false
+
 		for _, offer := range offers {
 			if offer.CheckedAt.After(latestChecked) {
 				latestChecked = offer.CheckedAt
 			}
+
 			if offer.ExpiresAt.After(latestExpiry) {
 				latestExpiry = offer.ExpiresAt
 			}
+
 			if offer.ExpiresAt.After(uc.now()) {
 				fresh = true
 			}
 		}
+
 		result.RefreshedAt = &latestChecked
+
 		result.ExpiresAt = &latestExpiry
 		if fresh {
 			result.Status = "ready"
@@ -141,5 +158,6 @@ func (uc *OfferUseCase) buildResult(ctx context.Context, perfumeID int64) (*doma
 			}
 		}
 	}
+
 	return result, nil
 }

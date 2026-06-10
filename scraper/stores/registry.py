@@ -1,6 +1,5 @@
 from .generic import GenericHTMLStore
 
-
 STORE_CONFIGS = (
     {
         "name": "Ozon",

@@ -29,13 +29,16 @@ func (r *UserRepo) GetOrCreate(ctx context.Context, tgID int64) (*domain.User, e
 	if err != nil {
 		return nil, err
 	}
+
 	if user != nil {
 		return user, nil
 	}
 
 	// Create new user
 	now := time.Now()
+
 	var id int64
+
 	err = r.db.QueryRowContext(ctx, `
 		INSERT INTO users (tg_id, created_at, updated_at)
 		VALUES ($1, $2, $2)
@@ -57,6 +60,7 @@ func (r *UserRepo) GetOrCreate(ctx context.Context, tgID int64) (*domain.User, e
 // GetByTgID retrieves a user by Telegram ID.
 func (r *UserRepo) GetByTgID(ctx context.Context, tgID int64) (*domain.User, error) {
 	user := &domain.User{}
+
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, tg_id, created_at, updated_at
 		FROM users
@@ -66,7 +70,9 @@ func (r *UserRepo) GetByTgID(ctx context.Context, tgID int64) (*domain.User, err
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
+
 	return user, nil
 }

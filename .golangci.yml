@@ -1,0 +1,55 @@
+version: "2"
+
+run:
+  timeout: 3m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - gosec
+    - govet
+    - ineffassign
+    - revive
+    - staticcheck
+    - wsl_v5
+  settings:
+    revive:
+      rules:
+        - name: indent-error-flow
+        - name: early-return
+        - name: var-naming
+        - name: exported
+        - name: error-return
+        - name: unreachable-code
+        - name: line-length-limit
+          arguments: [120]
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+    gosec:
+      excludes:
+        - G204
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+      - text: "Error return value of `.*\\.Close` is not checked"
+        linters:
+          - errcheck
+      - text: "Error return value of `log.Sync` is not checked"
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofumpt
+  settings:
+    gofumpt:
+      extra-rules: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -30,9 +30,33 @@ def test_matching_extracts_variant_and_rejects_unrelated_product():
 
 def test_price_risk_warns_for_large_discount_within_same_variant():
     offers = [
-        Offer(store="A", title="X", price=10000, url="https://a", volume_ml=100, concentration="EDP", product_type="retail"),
-        Offer(store="B", title="X", price=11000, url="https://b", volume_ml=100, concentration="EDP", product_type="retail"),
-        Offer(store="C", title="X", price=4000, url="https://c", volume_ml=100, concentration="EDP", product_type="retail"),
+        Offer(
+            store="A",
+            title="X",
+            price=10000,
+            url="https://a",
+            volume_ml=100,
+            concentration="EDP",
+            product_type="retail",
+        ),
+        Offer(
+            store="B",
+            title="X",
+            price=11000,
+            url="https://b",
+            volume_ml=100,
+            concentration="EDP",
+            product_type="retail",
+        ),
+        Offer(
+            store="C",
+            title="X",
+            price=4000,
+            url="https://c",
+            volume_ml=100,
+            concentration="EDP",
+            product_type="retail",
+        ),
     ]
 
     assess_price_risk(offers)
@@ -52,8 +76,16 @@ def test_single_offer_has_unknown_price_risk():
 
 def test_ozon_offer_warns_about_marketplace_even_at_normal_price():
     offers = [
-        Offer(store="Ozon", seller="Seller", title="X", price=9000, url="https://ozon.ru/product/x"),
-        Offer(store="ЛЭТУАЛЬ", seller="ЛЭТУАЛЬ", title="X", price=9100, url="https://letu.ru/product/x"),
+        Offer(
+            store="Ozon", seller="Seller", title="X", price=9000, url="https://ozon.ru/product/x"
+        ),
+        Offer(
+            store="ЛЭТУАЛЬ",
+            seller="ЛЭТУАЛЬ",
+            title="X",
+            price=9100,
+            url="https://letu.ru/product/x",
+        ),
     ]
 
     assess_price_risk(offers)

@@ -5,6 +5,7 @@ from selectolax.parser import HTMLParser
 
 from scraper.models import Offer, PerfumeTarget
 from scraper.robots import ensure_allowed
+
 from .base import StoreScraper
 
 
@@ -44,7 +45,9 @@ class GenericHTMLStore(StoreScraper):
             href = link_node.attributes.get("href", "")
             if price is None or not href:
                 continue
-            seller_node = card.css_first(selectors.get("seller", "")) if selectors.get("seller") else None
+            seller_node = (
+                card.css_first(selectors.get("seller", "")) if selectors.get("seller") else None
+            )
             offers.append(
                 Offer(
                     store=self.name,

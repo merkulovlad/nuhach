@@ -100,6 +100,7 @@ func TestBuildSearchQuery(t *testing.T) {
 	if result["from"] != float64(0) {
 		t.Errorf("'from' = %v, want 0", result["from"])
 	}
+
 	if result["size"] != float64(10) {
 		t.Errorf("'size' = %v, want 10", result["size"])
 	}
@@ -119,6 +120,7 @@ func TestBuildSearchQuery_WithOffset(t *testing.T) {
 	if result["from"] != float64(40) {
 		t.Errorf("'from' = %v, want 40", result["from"])
 	}
+
 	if result["size"] != float64(20) {
 		t.Errorf("'size' = %v, want 20", result["size"])
 	}
@@ -126,8 +128,11 @@ func TestBuildSearchQuery_WithOffset(t *testing.T) {
 
 func TestSearchQueryFieldCount(t *testing.T) {
 	query, _ := repository.BuildSearchQuery("test", 10, 0)
+
 	var result map[string]interface{}
-	json.Unmarshal(query, &result)
+	if err := json.Unmarshal(query, &result); err != nil {
+		t.Fatalf("Failed to unmarshal query: %v", err)
+	}
 
 	queryObj := result["query"].(map[string]interface{})
 	funcScore := queryObj["function_score"].(map[string]interface{})

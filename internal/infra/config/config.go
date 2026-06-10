@@ -78,6 +78,7 @@ func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
+
 	return defaultValue
 }
 
@@ -87,6 +88,7 @@ func getEnvInt(key string, defaultValue int) int {
 			return intVal
 		}
 	}
+
 	return defaultValue
 }
 
@@ -96,5 +98,6 @@ func getEnvFloat(key string, defaultValue float64) float64 {
 			return f
 		}
 	}
+
 	return defaultValue
 }

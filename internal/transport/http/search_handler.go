@@ -35,6 +35,7 @@ func (h *Handler) Search(c *fiber.Ctx) error {
 
 	// Optional: user ID for impression logging
 	var tgID *int64
+
 	if tgIDStr := c.Query("tg_id"); tgIDStr != "" {
 		if id, err := strconv.ParseInt(tgIDStr, 10, 64); err == nil {
 			tgID = &id
@@ -50,6 +51,7 @@ func (h *Handler) Search(c *fiber.Ctx) error {
 	result, err := h.searchUC.Search(c.Context(), query, limit, offset, tgID)
 	if err != nil {
 		h.logger.Error("Search failed", zap.Error(err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "search failed",
 		})
@@ -74,6 +76,7 @@ func (h *Handler) GetPerfume(c *fiber.Ctx) error {
 	perfume, err := h.searchUC.GetPerfumeByID(c.Context(), id)
 	if err != nil {
 		h.logger.Error("Failed to get perfume", zap.Error(err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to get perfume",
 		})
@@ -104,6 +107,7 @@ func (h *Handler) GetSimilarPerfumes(c *fiber.Ctx) error {
 
 	// Optional: user ID for filtering
 	var tgID *int64
+
 	if tgIDStr := c.Query("tg_id"); tgIDStr != "" {
 		if uid, err := strconv.ParseInt(tgIDStr, 10, 64); err == nil {
 			tgID = &uid
@@ -113,6 +117,7 @@ func (h *Handler) GetSimilarPerfumes(c *fiber.Ctx) error {
 	result, err := h.searchUC.GetSimilarPerfumes(c.Context(), id, limit, tgID)
 	if err != nil {
 		h.logger.Error("Failed to get similar perfumes", zap.Error(err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to get similar perfumes",
 		})
@@ -170,6 +175,7 @@ func (h *Handler) VectorSearch(c *fiber.Ctx) error {
 	result, err := h.searchUC.VectorSearch(c.Context(), req.Query, req.Embedding, limit, offset, req.TgID)
 	if err != nil {
 		h.logger.Error("Vector search failed", zap.Error(err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "vector search failed",
 		})

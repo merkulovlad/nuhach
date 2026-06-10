@@ -2,9 +2,7 @@
 package opensearch
 
 import (
-	"crypto/tls"
 	"fmt"
-	"net/http"
 
 	"github.com/opensearch-project/opensearch-go/v2"
 	"go.uber.org/zap"
@@ -14,9 +12,6 @@ import (
 func NewClient(url string, logger *zap.Logger) (*opensearch.Client, error) {
 	client, err := opensearch.NewClient(opensearch.Config{
 		Addresses: []string{url},
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create opensearch client: %w", err)
@@ -34,5 +29,6 @@ func NewClient(url string, logger *zap.Logger) (*opensearch.Client, error) {
 	}
 
 	logger.Info("Connected to OpenSearch", zap.String("url", url))
+
 	return client, nil
 }

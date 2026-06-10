@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import os
-import json
+from typing import Any
+
 import pandas as pd
 import psycopg
-from psycopg.rows import dict_row
 from dotenv import load_dotenv
 from opensearchpy import OpenSearch, helpers
-from typing import List, Dict, Any
+from psycopg.rows import dict_row
 
 load_dotenv()
 
@@ -113,7 +113,7 @@ def parse_rating_value(value):
     try:
         # Handle European format with comma as decimal separator
         if isinstance(value, str):
-            value = value.replace(',', '.')
+            value = value.replace(",", ".")
         return float(value)
     except (ValueError, TypeError):
         return None
@@ -128,63 +128,61 @@ def combine_notes(top, middle, base):
         notes.append(str(middle).strip())
     if pd.notna(base) and str(base).strip():
         notes.append(str(base).strip())
-    return ', '.join(notes) if notes else None
+    return ", ".join(notes) if notes else None
 
 
-def combine_accords(row, lang='en'):
+def combine_accords(row, lang="en"):
     """Combine accords from mainaccord1-5 columns."""
-    suffix = f'_{lang}'
+    suffix = f"_{lang}"
     accords = []
     for i in range(1, 6):
-        col_name = f'mainaccord{i}{suffix}'
+        col_name = f"mainaccord{i}{suffix}"
         if col_name in row and pd.notna(row[col_name]) and str(row[col_name]).strip():
             accords.append(str(row[col_name]).strip())
-    return ', '.join(accords) if accords else None
+    return ", ".join(accords) if accords else None
 
 
 def combine_perfumers(row):
     """Combine perfumer names."""
     perfumers = []
-    for col in ['Perfumer1', 'Perfumer2']:
-        if col in row and pd.notna(row[col]) and str(row[col]).strip() and str(row[col]).strip().lower() != 'unknown':
+    for col in ["Perfumer1", "Perfumer2"]:
+        if (
+            col in row
+            and pd.notna(row[col])
+            and str(row[col]).strip()
+            and str(row[col]).strip().lower() != "unknown"
+        ):
             perfumers.append(str(row[col]).strip())
-    return ', '.join(perfumers) if perfumers else None
+    return ", ".join(perfumers) if perfumers else None
 
 
-def prepare_opensearch_doc(row: pd.Series, doc_id: int) -> Dict[str, Any]:
+def prepare_opensearch_doc(row: pd.Series, doc_id: int) -> dict[str, Any]:
     """Transform a parquet row into an OpenSearch document according to the schema."""
     doc = {
-        'id': doc_id,
-        'url': str(row['url']) if pd.notna(row['url']) else None,
-        'name': str(row['Perfume']) if pd.notna(row['Perfume']) else None,
-        
+        "id": doc_id,
+        "url": str(row["url"]) if pd.notna(row["url"]) else None,
+        "name": str(row["Perfume"]) if pd.notna(row["Perfume"]) else None,
         # Brand (both languages)
-        'brand_en': str(row['Brand_en']) if pd.notna(row['Brand_en']) else None,
-        'brand_ru': str(row['Brand_ru']) if pd.notna(row['Brand_ru']) else None,
-        
+        "brand_en": str(row["Brand_en"]) if pd.notna(row["Brand_en"]) else None,
+        "brand_ru": str(row["Brand_ru"]) if pd.notna(row["Brand_ru"]) else None,
         # Gender (both languages)
-        'gender_en': str(row['Gender_en']) if pd.notna(row['Gender_en']) else None,
-        'gender_ru': str(row['Gender_ru']) if pd.notna(row['Gender_ru']) else None,
-        
+        "gender_en": str(row["Gender_en"]) if pd.notna(row["Gender_en"]) else None,
+        "gender_ru": str(row["Gender_ru"]) if pd.notna(row["Gender_ru"]) else None,
         # Year
-        'year': parse_int(row['Year']),
-        
+        "year": parse_int(row["Year"]),
         # Ratings
-        'rating_value': parse_rating_value(row['Rating Value']),
-        'rating_count': parse_int(row['Rating Count']),
-        
+        "rating_value": parse_rating_value(row["Rating Value"]),
+        "rating_count": parse_int(row["Rating Count"]),
         # Notes - combine top, middle, base for each language
-        'notes_en': combine_notes(row.get('Top_en'), row.get('Middle_en'), row.get('Base_en')),
-        'notes_ru': combine_notes(row.get('Top_ru'), row.get('Middle_ru'), row.get('Base_ru')),
-        
+        "notes_en": combine_notes(row.get("Top_en"), row.get("Middle_en"), row.get("Base_en")),
+        "notes_ru": combine_notes(row.get("Top_ru"), row.get("Middle_ru"), row.get("Base_ru")),
         # Accords - combine mainaccord1-5 for each language
-        'accords_en': combine_accords(row, 'en'),
-        'accords_ru': combine_accords(row, 'ru'),
-        
+        "accords_en": combine_accords(row, "en"),
+        "accords_ru": combine_accords(row, "ru"),
         # Perfumers
-        'perfumers_en': combine_perfumers(row),
+        "perfumers_en": combine_perfumers(row),
     }
-    
+
     # Remove None values to keep the document clean
     return {k: v for k, v in doc.items() if v is not None}
 
@@ -192,12 +190,12 @@ def prepare_opensearch_doc(row: pd.Series, doc_id: int) -> Dict[str, Any]:
 def create_opensearch_client() -> OpenSearch:
     """Create and return an OpenSearch client."""
     client = OpenSearch(
-        hosts=[{'host': OPENSEARCH_HOST, 'port': OPENSEARCH_PORT}],
+        hosts=[{"host": OPENSEARCH_HOST, "port": OPENSEARCH_PORT}],
         http_compress=True,
         use_ssl=False,
         verify_certs=False,
         ssl_assert_hostname=False,
-        ssl_show_warn=False
+        ssl_show_warn=False,
     )
     return client
 
@@ -207,11 +205,11 @@ def ingest_to_opensearch():
     print(f"Loading parquet file from: {PARQUET_PATH}")
     df = pd.read_parquet(PARQUET_PATH)
     print(f"Loaded {len(df)} rows from parquet file")
-    
+
     # Create OpenSearch client
     print(f"Connecting to OpenSearch at {OPENSEARCH_HOST}:{OPENSEARCH_PORT}")
     client = create_opensearch_client()
-    
+
     # Check if index exists
     if client.indices.exists(index=OPENSEARCH_INDEX):
         print(f"Index '{OPENSEARCH_INDEX}' already exists")
@@ -220,49 +218,42 @@ def ingest_to_opensearch():
         # print(f"Deleted existing index '{OPENSEARCH_INDEX}'")
     else:
         print(f"Index '{OPENSEARCH_INDEX}' does not exist yet")
-    
+
     # Prepare documents for bulk indexing
     print("Preparing documents for OpenSearch...")
     actions = []
     for idx, row in df.iterrows():
         doc = prepare_opensearch_doc(row, idx + 1)
-        action = {
-            '_index': OPENSEARCH_INDEX,
-            '_id': idx + 1,
-            '_source': doc
-        }
+        action = {"_index": OPENSEARCH_INDEX, "_id": idx + 1, "_source": doc}
         actions.append(action)
-    
+
     # Bulk index documents
     print(f"Starting bulk indexing of {len(actions)} documents...")
     success_count = 0
     error_count = 0
-    
+
     # Use helpers.bulk for efficient bulk indexing
     try:
         for ok, response in helpers.streaming_bulk(
-            client,
-            actions,
-            chunk_size=BATCH_SIZE,
-            raise_on_error=False
+            client, actions, chunk_size=BATCH_SIZE, raise_on_error=False
         ):
             if ok:
                 success_count += 1
             else:
                 error_count += 1
                 print(f"Error indexing document: {response}")
-            
+
             if (success_count + error_count) % 1000 == 0:
                 print(f"Progress: {success_count} successful, {error_count} errors")
-        
-        print(f"\nIndexing complete!")
+
+        print("\nIndexing complete!")
         print(f"Successfully indexed: {success_count} documents")
         print(f"Errors: {error_count} documents")
-        
+
         # Refresh the index to make documents searchable immediately
         client.indices.refresh(index=OPENSEARCH_INDEX)
         print(f"Index '{OPENSEARCH_INDEX}' refreshed")
-        
+
     except Exception as e:
         print(f"Error during bulk indexing: {e}")
         raise
@@ -272,20 +263,33 @@ def ingest_to_opensearch():
 
 def prepare_row(row_dict):
     """Map CSV row to DB columns."""
-    db_row = {col: None for col in DB_COLUMNS}
+    db_row = dict.fromkeys(DB_COLUMNS)
 
     for csv_col, value in row_dict.items():
         db_col = COLUMN_MAPPING.get(csv_col)
-        
+
         if db_col is None:
             # Unmapped column, skip
             continue
 
         # Map to DB column with appropriate type conversion
-        if db_col in ["top_notes", "middle_notes", "base_notes", "perfume_name", 
-                      "brand", "country", "gender", "perfumer1", "perfumer2",
-                      "main_accord1", "main_accord2", "main_accord3", 
-                      "main_accord4", "main_accord5", "url"]:
+        if db_col in [
+            "top_notes",
+            "middle_notes",
+            "base_notes",
+            "perfume_name",
+            "brand",
+            "country",
+            "gender",
+            "perfumer1",
+            "perfumer2",
+            "main_accord1",
+            "main_accord2",
+            "main_accord3",
+            "main_accord4",
+            "main_accord5",
+            "url",
+        ]:
             db_row[db_col] = parse_text_value(value)
         elif db_col == "year" or db_col == "rating_count":
             db_row[db_col] = parse_int(value)
@@ -317,15 +321,16 @@ def ingest_to_postgres():
         db_row = prepare_row(row.to_dict())
         rows_to_insert.append(db_row)
 
-    print(f"Connecting to database: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
+    print(
+        f"Connecting to database: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}"
+    )
 
-    with psycopg.connect(DATABASE_URL) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            # Optional: Truncate table for clean re-run
-            # cur.execute("TRUNCATE TABLE perfumes RESTART IDENTITY CASCADE")
-            # conn.commit()
+    with psycopg.connect(DATABASE_URL) as conn, conn.cursor(row_factory=dict_row) as cur:
+        # Optional: Truncate table for clean re-run
+        # cur.execute("TRUNCATE TABLE perfumes RESTART IDENTITY CASCADE")
+        # conn.commit()
 
-            insert_sql = f"""
+        insert_sql = """
                 INSERT INTO perfumes (
                     url, perfume_name, brand, country, gender,
                     rating_value, rating_count, year,
@@ -362,16 +367,16 @@ def ingest_to_postgres():
                     updated_at = CURRENT_TIMESTAMP
             """
 
-            total = len(rows_to_insert)
-            inserted = 0
+        total = len(rows_to_insert)
+        inserted = 0
 
-            for i in range(0, total, BATCH_SIZE):
-                batch = rows_to_insert[i:i + BATCH_SIZE]
-                cur.executemany(insert_sql, batch)
-                inserted += len(batch)
-                print(f"Progress: {inserted}/{total} rows")
+        for i in range(0, total, BATCH_SIZE):
+            batch = rows_to_insert[i : i + BATCH_SIZE]
+            cur.executemany(insert_sql, batch)
+            inserted += len(batch)
+            print(f"Progress: {inserted}/{total} rows")
 
-            conn.commit()
+        conn.commit()
 
     print(f"Successfully loaded {inserted} rows into perfumes table")
 
@@ -379,42 +384,46 @@ def ingest_to_postgres():
 def main():
     """Main function to orchestrate data ingestion."""
     import argparse
-    
-    parser = argparse.ArgumentParser(description='Ingest perfume data into PostgreSQL and/or OpenSearch')
-    parser.add_argument('--postgres', action='store_true', help='Ingest into PostgreSQL')
-    parser.add_argument('--opensearch', action='store_true', help='Ingest into OpenSearch')
-    parser.add_argument('--all', action='store_true', help='Ingest into both PostgreSQL and OpenSearch')
-    
+
+    parser = argparse.ArgumentParser(
+        description="Ingest perfume data into PostgreSQL and/or OpenSearch"
+    )
+    parser.add_argument("--postgres", action="store_true", help="Ingest into PostgreSQL")
+    parser.add_argument("--opensearch", action="store_true", help="Ingest into OpenSearch")
+    parser.add_argument(
+        "--all", action="store_true", help="Ingest into both PostgreSQL and OpenSearch"
+    )
+
     args = parser.parse_args()
-    
+
     # If no arguments provided, show help
     if not (args.postgres or args.opensearch or args.all):
         parser.print_help()
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("No target specified. Please choose one of the following:")
         print("  --postgres    : Ingest data into PostgreSQL")
         print("  --opensearch  : Ingest data into OpenSearch")
         print("  --all         : Ingest data into both systems")
-        print("="*60)
+        print("=" * 60)
         return
-    
+
     try:
         if args.postgres or args.all:
-            print("\n" + "="*60)
+            print("\n" + "=" * 60)
             print("INGESTING INTO POSTGRESQL")
-            print("="*60)
+            print("=" * 60)
             ingest_to_postgres()
-        
+
         if args.opensearch or args.all:
-            print("\n" + "="*60)
+            print("\n" + "=" * 60)
             print("INGESTING INTO OPENSEARCH")
-            print("="*60)
+            print("=" * 60)
             ingest_to_opensearch()
-        
-        print("\n" + "="*60)
+
+        print("\n" + "=" * 60)
         print("ALL INGESTION TASKS COMPLETED SUCCESSFULLY")
-        print("="*60)
-    
+        print("=" * 60)
+
     except Exception as e:
         print(f"\nError during ingestion: {e}")
         raise

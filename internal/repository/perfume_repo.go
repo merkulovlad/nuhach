@@ -21,20 +21,24 @@ func parseVector(s string) ([]float32, error) {
 	}
 	// Remove brackets
 	s = strings.TrimPrefix(s, "[")
+
 	s = strings.TrimSuffix(s, "]")
 	if s == "" {
 		return nil, nil
 	}
 
 	parts := strings.Split(s, ",")
+
 	result := make([]float32, len(parts))
 	for i, p := range parts {
 		f, err := strconv.ParseFloat(strings.TrimSpace(p), 32)
 		if err != nil {
 			return nil, err
 		}
+
 		result[i] = float32(f)
 	}
+
 	return result, nil
 }
 
@@ -43,10 +47,12 @@ func vectorToString(v []float32) string {
 	if len(v) == 0 {
 		return ""
 	}
+
 	parts := make([]string, len(v))
 	for i, f := range v {
 		parts[i] = strconv.FormatFloat(float64(f), 'f', -1, 32)
 	}
+
 	return "[" + strings.Join(parts, ",") + "]"
 }
 
@@ -78,9 +84,12 @@ func (r *PerfumeRepo) GetByID(ctx context.Context, id int64) (*domain.Perfume, e
 	`
 
 	perfume := &domain.Perfume{}
-	var url, brandEN, gender sql.NullString
-	var ratingValue sql.NullFloat64
-	var ratingCount, year sql.NullInt64
+
+	var (
+		url, brandEN, gender sql.NullString
+		ratingValue          sql.NullFloat64
+		ratingCount, year    sql.NullInt64
+	)
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&perfume.ID, &url, &perfume.Name,
@@ -92,19 +101,23 @@ func (r *PerfumeRepo) GetByID(ctx context.Context, id int64) (*domain.Perfume, e
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get perfume: %w", err)
 	}
 
 	perfume.URL = url.String
 	perfume.Brand = brandEN.String
+
 	perfume.Gender = gender.String
 	if ratingValue.Valid {
 		perfume.RatingValue = &ratingValue.Float64
 	}
+
 	if ratingCount.Valid {
 		rc := int(ratingCount.Int64)
 		perfume.RatingCount = &rc
 	}
+
 	if year.Valid {
 		y := int(year.Int64)
 		perfume.Year = &y
@@ -138,19 +151,26 @@ func (r *PerfumeRepo) GetByID(ctx context.Context, id int64) (*domain.Perfume, e
 	defer rows.Close()
 
 	var notesEN, notesRU []string
+
 	for rows.Next() {
-		var noteEN, noteRU sql.NullString
-		var noteType string
+		var (
+			noteEN, noteRU sql.NullString
+			noteType       string
+		)
+
 		if err := rows.Scan(&noteEN, &noteRU, &noteType); err != nil {
 			continue
 		}
+
 		if noteEN.Valid {
 			notesEN = append(notesEN, noteEN.String)
 		}
+
 		if noteRU.Valid {
 			notesRU = append(notesRU, noteRU.String)
 		}
 	}
+
 	perfume.NotesEN = strings.Join(notesEN, ", ")
 	perfume.NotesRU = strings.Join(notesRU, ", ")
 
@@ -171,18 +191,22 @@ func (r *PerfumeRepo) GetByID(ctx context.Context, id int64) (*domain.Perfume, e
 	defer rows.Close()
 
 	var accordsEN, accordsRU []string
+
 	for rows.Next() {
 		var accordEN, accordRU sql.NullString
 		if err := rows.Scan(&accordEN, &accordRU); err != nil {
 			continue
 		}
+
 		if accordEN.Valid {
 			accordsEN = append(accordsEN, accordEN.String)
 		}
+
 		if accordRU.Valid {
 			accordsRU = append(accordsRU, accordRU.String)
 		}
 	}
+
 	perfume.AccordsEN = strings.Join(accordsEN, ", ")
 	perfume.AccordsRU = strings.Join(accordsRU, ", ")
 
@@ -201,13 +225,16 @@ func (r *PerfumeRepo) GetByID(ctx context.Context, id int64) (*domain.Perfume, e
 	defer rows.Close()
 
 	var perfumers []string
+
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
 			continue
 		}
+
 		perfumers = append(perfumers, name)
 	}
+
 	perfume.Perfumers = strings.Join(perfumers, ", ")
 
 	return perfume, nil
@@ -237,11 +264,14 @@ func (r *PerfumeRepo) GetByIDs(ctx context.Context, ids []int64) ([]domain.Perfu
 	defer rows.Close()
 
 	var perfumes []domain.Perfume
+
 	for rows.Next() {
-		var p domain.Perfume
-		var url, brandEN, gender sql.NullString
-		var ratingValue sql.NullFloat64
-		var ratingCount, year sql.NullInt64
+		var (
+			p                    domain.Perfume
+			url, brandEN, gender sql.NullString
+			ratingValue          sql.NullFloat64
+			ratingCount, year    sql.NullInt64
+		)
 
 		if err := rows.Scan(
 			&p.ID, &url, &p.Name,
@@ -254,14 +284,17 @@ func (r *PerfumeRepo) GetByIDs(ctx context.Context, ids []int64) ([]domain.Perfu
 
 		p.URL = url.String
 		p.Brand = brandEN.String
+
 		p.Gender = gender.String
 		if ratingValue.Valid {
 			p.RatingValue = &ratingValue.Float64
 		}
+
 		if ratingCount.Valid {
 			rc := int(ratingCount.Int64)
 			p.RatingCount = &rc
 		}
+
 		if year.Valid {
 			y := int(year.Int64)
 			p.Year = &y
@@ -275,9 +308,15 @@ func (r *PerfumeRepo) GetByIDs(ctx context.Context, ids []int64) ([]domain.Perfu
 
 // GetSimilar retrieves similar perfumes using pgvector kNN.
 // Returns Russian translations when available, falls back to English.
-func (r *PerfumeRepo) GetSimilar(ctx context.Context, perfumeID int64, limit int, excludeIDs []int64) ([]domain.PerfumeWithEmbedding, error) {
+func (r *PerfumeRepo) GetSimilar(
+	ctx context.Context,
+	perfumeID int64,
+	limit int,
+	excludeIDs []int64,
+) ([]domain.PerfumeWithEmbedding, error) {
 	// Get rec_embedding for the target perfume (used for item-to-item similarity)
 	var embeddingStr string
+
 	err := r.db.QueryRowContext(ctx, `
 		SELECT rec_embedding::text 
 		FROM perfume_search 
@@ -289,6 +328,7 @@ func (r *PerfumeRepo) GetSimilar(ctx context.Context, perfumeID int64, limit int
 			r.logger.Warn("Perfume has no embedding for similar search", zap.Int64("perfumeID", perfumeID))
 			return []domain.PerfumeWithEmbedding{}, nil
 		}
+
 		return nil, fmt.Errorf("failed to get perfume rec_embedding: %w", err)
 	}
 
@@ -321,14 +361,19 @@ func (r *PerfumeRepo) GetSimilar(ctx context.Context, perfumeID int64, limit int
 	}
 	defer rows.Close()
 
-	var results []domain.PerfumeWithEmbedding
-	var perfumeIDs []int64
+	var (
+		results    []domain.PerfumeWithEmbedding
+		perfumeIDs []int64
+	)
+
 	for rows.Next() {
-		var p domain.PerfumeWithEmbedding
-		var url, brand sql.NullString
-		var ratingValue sql.NullFloat64
-		var ratingCount, year sql.NullInt64
-		var embStr string
+		var (
+			p                 domain.PerfumeWithEmbedding
+			url, brand        sql.NullString
+			ratingValue       sql.NullFloat64
+			ratingCount, year sql.NullInt64
+			embStr            string
+		)
 
 		if err := rows.Scan(
 			&p.ID, &url, &p.Name,
@@ -340,18 +385,22 @@ func (r *PerfumeRepo) GetSimilar(ctx context.Context, perfumeID int64, limit int
 		}
 
 		p.URL = url.String
+
 		p.Brand = brand.String
 		if ratingValue.Valid {
 			p.RatingValue = &ratingValue.Float64
 		}
+
 		if ratingCount.Valid {
 			rc := int(ratingCount.Int64)
 			p.RatingCount = &rc
 		}
+
 		if year.Valid {
 			y := int(year.Int64)
 			p.Year = &y
 		}
+
 		p.Embedding, _ = parseVector(embStr)
 
 		results = append(results, p)
@@ -369,7 +418,12 @@ func (r *PerfumeRepo) GetSimilar(ctx context.Context, perfumeID int64, limit int
 // GetCandidatesForUser retrieves recommendation candidates using user embedding.
 // Uses rec_embedding for personalized recommendations.
 // Returns Russian translations when available, falls back to English.
-func (r *PerfumeRepo) GetCandidatesForUser(ctx context.Context, userEmbedding []float32, limit int, excludeIDs []int64) ([]domain.PerfumeWithEmbedding, error) {
+func (r *PerfumeRepo) GetCandidatesForUser(
+	ctx context.Context,
+	userEmbedding []float32,
+	limit int,
+	excludeIDs []int64,
+) ([]domain.PerfumeWithEmbedding, error) {
 	query := `
 		SELECT 
 			p.id, p.url, p.perfume_name, 
@@ -396,14 +450,19 @@ func (r *PerfumeRepo) GetCandidatesForUser(ctx context.Context, userEmbedding []
 	}
 	defer rows.Close()
 
-	var results []domain.PerfumeWithEmbedding
-	var perfumeIDs []int64
+	var (
+		results    []domain.PerfumeWithEmbedding
+		perfumeIDs []int64
+	)
+
 	for rows.Next() {
-		var p domain.PerfumeWithEmbedding
-		var url, brand sql.NullString
-		var ratingValue sql.NullFloat64
-		var ratingCount, year sql.NullInt64
-		var embStr string
+		var (
+			p                 domain.PerfumeWithEmbedding
+			url, brand        sql.NullString
+			ratingValue       sql.NullFloat64
+			ratingCount, year sql.NullInt64
+			embStr            string
+		)
 
 		if err := rows.Scan(
 			&p.ID, &url, &p.Name,
@@ -415,18 +474,22 @@ func (r *PerfumeRepo) GetCandidatesForUser(ctx context.Context, userEmbedding []
 		}
 
 		p.URL = url.String
+
 		p.Brand = brand.String
 		if ratingValue.Valid {
 			p.RatingValue = &ratingValue.Float64
 		}
+
 		if ratingCount.Valid {
 			rc := int(ratingCount.Int64)
 			p.RatingCount = &rc
 		}
+
 		if year.Valid {
 			y := int(year.Int64)
 			p.Year = &y
 		}
+
 		p.Embedding, _ = parseVector(embStr)
 
 		results = append(results, p)
@@ -445,6 +508,7 @@ func (r *PerfumeRepo) GetCandidatesForUser(ctx context.Context, userEmbedding []
 // Used for building user embeddings from liked perfumes.
 func (r *PerfumeRepo) GetEmbeddingByPerfumeID(ctx context.Context, perfumeID int64) ([]float32, error) {
 	var embStr string
+
 	err := r.db.QueryRowContext(ctx, `
 		SELECT rec_embedding::text 
 		FROM perfume_search 
@@ -454,8 +518,10 @@ func (r *PerfumeRepo) GetEmbeddingByPerfumeID(ctx context.Context, perfumeID int
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get embedding: %w", err)
 	}
+
 	return parseVector(embStr)
 }
 
@@ -471,6 +537,7 @@ func (r *PerfumeRepo) GetGlobalStats(ctx context.Context) (meanRating float64, t
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get global stats: %w", err)
 	}
+
 	return meanRating, totalPerfumes, nil
 }
 
@@ -492,11 +559,14 @@ func (r *PerfumeRepo) GetAll(ctx context.Context) ([]domain.Perfume, error) {
 	defer rows.Close()
 
 	var perfumes []domain.Perfume
+
 	for rows.Next() {
-		var p domain.Perfume
-		var url, brandEN sql.NullString
-		var ratingValue sql.NullFloat64
-		var ratingCount, year sql.NullInt64
+		var (
+			p                 domain.Perfume
+			url, brandEN      sql.NullString
+			ratingValue       sql.NullFloat64
+			ratingCount, year sql.NullInt64
+		)
 
 		if err := rows.Scan(
 			&p.ID, &url, &p.Name,
@@ -507,14 +577,17 @@ func (r *PerfumeRepo) GetAll(ctx context.Context) ([]domain.Perfume, error) {
 		}
 
 		p.URL = url.String
+
 		p.Brand = brandEN.String
 		if ratingValue.Valid {
 			p.RatingValue = &ratingValue.Float64
 		}
+
 		if ratingCount.Valid {
 			rc := int(ratingCount.Int64)
 			p.RatingCount = &rc
 		}
+
 		if year.Valid {
 			y := int(year.Int64)
 			p.Year = &y
@@ -529,7 +602,11 @@ func (r *PerfumeRepo) GetAll(ctx context.Context) ([]domain.Perfume, error) {
 // FullTextSearch performs PostgreSQL full-text search as a fallback.
 // Uses the perfume_search table with GIN indexes for Russian and English text.
 // Returns Russian translations when available, falls back to English.
-func (r *PerfumeRepo) FullTextSearch(ctx context.Context, query string, limit, offset int) ([]domain.PerfumeCard, int64, error) {
+func (r *PerfumeRepo) FullTextSearch(
+	ctx context.Context,
+	query string,
+	limit, offset int,
+) ([]domain.PerfumeCard, int64, error) {
 	// Search both Russian and English text columns with ILIKE fallback
 	// Returns Russian notes/accords with fallback to English
 	searchQuery := `
@@ -569,13 +646,18 @@ func (r *PerfumeRepo) FullTextSearch(ctx context.Context, query string, limit, o
 	}
 	defer rows.Close()
 
-	var cards []domain.PerfumeCard
-	var perfumeIDs []int64
+	var (
+		cards      []domain.PerfumeCard
+		perfumeIDs []int64
+	)
+
 	for rows.Next() {
-		var card domain.PerfumeCard
-		var brand sql.NullString
-		var ratingValue sql.NullFloat64
-		var ratingCount, year sql.NullInt64
+		var (
+			card              domain.PerfumeCard
+			brand             sql.NullString
+			ratingValue       sql.NullFloat64
+			ratingCount, year sql.NullInt64
+		)
 
 		if err := rows.Scan(
 			&card.ID, &card.Name,
@@ -590,10 +672,12 @@ func (r *PerfumeRepo) FullTextSearch(ctx context.Context, query string, limit, o
 		if ratingValue.Valid {
 			card.RatingValue = &ratingValue.Float64
 		}
+
 		if ratingCount.Valid {
 			rc := int(ratingCount.Int64)
 			card.RatingCount = &rc
 		}
+
 		if year.Valid {
 			y := int(year.Int64)
 			card.Year = &y
@@ -620,9 +704,11 @@ func (r *PerfumeRepo) FullTextSearch(ctx context.Context, query string, limit, o
 			OR ps.search_text_en ILIKE '%' || $1 || '%'
 			OR p.perfume_name ILIKE '%' || $1 || '%'
 	`
+
 	var total int64
 	if err := r.db.QueryRowContext(ctx, countQuery, query).Scan(&total); err != nil {
 		r.logger.Warn("failed to get full-text search count", zap.Error(err))
+
 		total = int64(len(cards))
 	}
 
@@ -632,7 +718,11 @@ func (r *PerfumeRepo) FullTextSearch(ctx context.Context, query string, limit, o
 // VectorSearchByEmbedding performs semantic search using query embedding.
 // Uses the search_embedding column (768-dim from multilingual-e5-base).
 // Returns Russian translations when available, falls back to English.
-func (r *PerfumeRepo) VectorSearchByEmbedding(ctx context.Context, embedding []float32, limit, offset int) ([]domain.PerfumeCard, int64, error) {
+func (r *PerfumeRepo) VectorSearchByEmbedding(
+	ctx context.Context,
+	embedding []float32,
+	limit, offset int,
+) ([]domain.PerfumeCard, int64, error) {
 	// kNN search using pgvector with search_embedding (for query→doc search)
 	query := `
 		SELECT 
@@ -653,13 +743,18 @@ func (r *PerfumeRepo) VectorSearchByEmbedding(ctx context.Context, embedding []f
 	}
 	defer rows.Close()
 
-	var cards []domain.PerfumeCard
-	var perfumeIDs []int64
+	var (
+		cards      []domain.PerfumeCard
+		perfumeIDs []int64
+	)
+
 	for rows.Next() {
-		var card domain.PerfumeCard
-		var brand sql.NullString
-		var ratingValue sql.NullFloat64
-		var ratingCount, year sql.NullInt64
+		var (
+			card              domain.PerfumeCard
+			brand             sql.NullString
+			ratingValue       sql.NullFloat64
+			ratingCount, year sql.NullInt64
+		)
 
 		if err := rows.Scan(
 			&card.ID, &card.Name,
@@ -674,10 +769,12 @@ func (r *PerfumeRepo) VectorSearchByEmbedding(ctx context.Context, embedding []f
 		if ratingValue.Valid {
 			card.RatingValue = &ratingValue.Float64
 		}
+
 		if ratingCount.Valid {
 			rc := int(ratingCount.Int64)
 			card.RatingCount = &rc
 		}
+
 		if year.Valid {
 			y := int(year.Int64)
 			card.Year = &y
@@ -697,7 +794,11 @@ func (r *PerfumeRepo) VectorSearchByEmbedding(ctx context.Context, embedding []f
 	if limit > 0 && len(cards) == limit {
 		// There might be more results
 		var countResult int64
-		err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM perfume_search WHERE embedding IS NOT NULL`).Scan(&countResult)
+
+		err := r.db.QueryRowContext(
+			ctx,
+			`SELECT COUNT(*) FROM perfume_search WHERE embedding IS NOT NULL`,
+		).Scan(&countResult)
 		if err == nil {
 			total = countResult
 		}
@@ -709,7 +810,11 @@ func (r *PerfumeRepo) VectorSearchByEmbedding(ctx context.Context, embedding []f
 // enrichCardsWithNotesAndAccords adds notes and accords to PerfumeCards.
 // Prefers Russian notes, but keeps accords in English because the current
 // accord translations are noisy and user-facing.
-func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(ctx context.Context, cards []domain.PerfumeCard, perfumeIDs []int64) {
+func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(
+	ctx context.Context,
+	cards []domain.PerfumeCard,
+	perfumeIDs []int64,
+) {
 	// Build ID to index map
 	idToIdx := make(map[int64]int)
 	for i, id := range perfumeIDs {
@@ -735,14 +840,20 @@ func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(ctx context.Context, cards 
 	rows, err := r.db.QueryContext(ctx, notesQuery, pq.Array(perfumeIDs))
 	if err == nil {
 		defer rows.Close()
+
 		notesMap := make(map[int64][]string)
+
 		for rows.Next() {
-			var perfumeID int64
-			var note string
+			var (
+				perfumeID int64
+				note      string
+			)
+
 			if err := rows.Scan(&perfumeID, &note); err == nil {
 				notesMap[perfumeID] = append(notesMap[perfumeID], note)
 			}
 		}
+
 		for id, notes := range notesMap {
 			if idx, ok := idToIdx[id]; ok {
 				cards[idx].Notes = truncateNotesString(strings.Join(notes, ", "), 100)
@@ -763,14 +874,20 @@ func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(ctx context.Context, cards 
 	rows, err = r.db.QueryContext(ctx, accordsQuery, pq.Array(perfumeIDs))
 	if err == nil {
 		defer rows.Close()
+
 		accordsMap := make(map[int64][]string)
+
 		for rows.Next() {
-			var perfumeID int64
-			var accord string
+			var (
+				perfumeID int64
+				accord    string
+			)
+
 			if err := rows.Scan(&perfumeID, &accord); err == nil {
 				accordsMap[perfumeID] = append(accordsMap[perfumeID], accord)
 			}
 		}
+
 		for id, accords := range accordsMap {
 			if idx, ok := idToIdx[id]; ok {
 				cards[idx].Accords = truncateNotesString(strings.Join(accords, ", "), 80)
@@ -782,7 +899,11 @@ func (r *PerfumeRepo) enrichCardsWithNotesAndAccords(ctx context.Context, cards 
 // enrichPerfumesWithNotesAndAccords adds notes and accords to PerfumeWithEmbedding.
 // Prefers Russian notes, but keeps accords in English because the current
 // accord translations are noisy and user-facing.
-func (r *PerfumeRepo) enrichPerfumesWithNotesAndAccords(ctx context.Context, perfumes []domain.PerfumeWithEmbedding, perfumeIDs []int64) {
+func (r *PerfumeRepo) enrichPerfumesWithNotesAndAccords(
+	ctx context.Context,
+	perfumes []domain.PerfumeWithEmbedding,
+	perfumeIDs []int64,
+) {
 	// Build ID to index map
 	idToIdx := make(map[int64]int)
 	for i, id := range perfumeIDs {
@@ -808,14 +929,20 @@ func (r *PerfumeRepo) enrichPerfumesWithNotesAndAccords(ctx context.Context, per
 	rows, err := r.db.QueryContext(ctx, notesQuery, pq.Array(perfumeIDs))
 	if err == nil {
 		defer rows.Close()
+
 		notesMap := make(map[int64][]string)
+
 		for rows.Next() {
-			var perfumeID int64
-			var note string
+			var (
+				perfumeID int64
+				note      string
+			)
+
 			if err := rows.Scan(&perfumeID, &note); err == nil {
 				notesMap[perfumeID] = append(notesMap[perfumeID], note)
 			}
 		}
+
 		for id, notes := range notesMap {
 			if idx, ok := idToIdx[id]; ok {
 				perfumes[idx].NotesRU = strings.Join(notes, ", ")
@@ -836,14 +963,20 @@ func (r *PerfumeRepo) enrichPerfumesWithNotesAndAccords(ctx context.Context, per
 	rows, err = r.db.QueryContext(ctx, accordsQuery, pq.Array(perfumeIDs))
 	if err == nil {
 		defer rows.Close()
+
 		accordsMap := make(map[int64][]string)
+
 		for rows.Next() {
-			var perfumeID int64
-			var accord string
+			var (
+				perfumeID int64
+				accord    string
+			)
+
 			if err := rows.Scan(&perfumeID, &accord); err == nil {
 				accordsMap[perfumeID] = append(accordsMap[perfumeID], accord)
 			}
 		}
+
 		for id, accords := range accordsMap {
 			if idx, ok := idToIdx[id]; ok {
 				perfumes[idx].AccordsEN = strings.Join(accords, ", ")
@@ -862,5 +995,6 @@ func truncateNotesString(s string, maxLen int) string {
 	if idx := strings.LastIndex(truncated, ","); idx > maxLen/2 {
 		return truncated[:idx]
 	}
+
 	return truncated + "..."
 }

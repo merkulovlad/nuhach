@@ -65,7 +65,11 @@ type scoredCandidate struct {
 }
 
 // GetRecommendations generates personalized recommendations for a user.
-func (uc *RecommendationUseCase) GetRecommendations(ctx context.Context, tgID int64, limit int) (*domain.RecommendationResult, error) {
+func (uc *RecommendationUseCase) GetRecommendations(
+	ctx context.Context,
+	tgID int64,
+	limit int,
+) (*domain.RecommendationResult, error) {
 	// Get or create user
 	user, err := uc.userRepo.GetOrCreate(ctx, tgID)
 	if err != nil {
@@ -99,6 +103,7 @@ func (uc *RecommendationUseCase) GetRecommendations(ctx context.Context, tgID in
 	} else {
 		// Cold start: get popular perfumes
 		uc.logger.Info("Cold start recommendation for user", zap.Int64("tg_id", tgID))
+
 		candidates, err = uc.getColdStartCandidates(ctx, limit*2, excludeIDs)
 		if err != nil {
 			return nil, err
@@ -116,6 +121,7 @@ func (uc *RecommendationUseCase) GetRecommendations(ctx context.Context, tgID in
 	globalMean, _, err := uc.perfumeRepo.GetGlobalStats(ctx)
 	if err != nil {
 		globalMean = 3.5 // Default if stats unavailable
+
 		uc.logger.Warn("using default global mean", zap.Error(err))
 	}
 
@@ -133,12 +139,14 @@ func (uc *RecommendationUseCase) GetRecommendations(ctx context.Context, tgID in
 	cards := make([]domain.PerfumeCard, len(result))
 	ids := make([]int64, len(result))
 	ranks := make([]int, len(result))
+
 	var explorationIDs []int64
 
 	for i, sc := range result {
 		cards[i] = perfumeToCard(sc.perfume.Perfume)
 		ids[i] = sc.perfume.ID
 		ranks[i] = i + 1
+
 		if sc.isExploration {
 			explorationIDs = append(explorationIDs, sc.perfume.ID)
 		}
@@ -146,6 +154,7 @@ func (uc *RecommendationUseCase) GetRecommendations(ctx context.Context, tgID in
 
 	// Generate request ID and log impressions
 	requestID := uuid.New().String()
+
 	err = uc.eventRepo.CreateImpressionLog(ctx, &domain.ImpressionLog{
 		UserID:     user.ID,
 		RequestID:  requestID,
@@ -165,7 +174,11 @@ func (uc *RecommendationUseCase) GetRecommendations(ctx context.Context, tgID in
 }
 
 // scoreAndRank scores candidates and sorts by final score.
-func (uc *RecommendationUseCase) scoreAndRank(candidates []domain.PerfumeWithEmbedding, userEmb *domain.UserEmbedding, globalMean float64) []scoredCandidate {
+func (uc *RecommendationUseCase) scoreAndRank(
+	candidates []domain.PerfumeWithEmbedding,
+	userEmb *domain.UserEmbedding,
+	globalMean float64,
+) []scoredCandidate {
 	scored := make([]scoredCandidate, len(candidates))
 
 	for i, c := range candidates {
@@ -189,6 +202,7 @@ func (uc *RecommendationUseCase) scoreAndRank(candidates []domain.PerfumeWithEmb
 		if normalizedRating < 0 {
 			normalizedRating = 0
 		}
+
 		if normalizedRating > 1 {
 			normalizedRating = 1
 		}
@@ -209,7 +223,11 @@ func (uc *RecommendationUseCase) scoreAndRank(candidates []domain.PerfumeWithEmb
 // computeWeightedRating computes Bayesian weighted rating.
 // Formula: wr = (v/(v+m))*R + (m/(v+m))*C
 // Where: v = rating_count, R = rating_value, m = threshold, C = global mean
-func (uc *RecommendationUseCase) computeWeightedRating(ratingValue *float64, ratingCount *int, globalMean float64) float64 {
+func (uc *RecommendationUseCase) computeWeightedRating(
+	ratingValue *float64,
+	ratingCount *int,
+	globalMean float64,
+) float64 {
 	// If missing data, return global mean (neutral)
 	if ratingValue == nil || ratingCount == nil {
 		return globalMean
@@ -224,15 +242,17 @@ func (uc *RecommendationUseCase) computeWeightedRating(ratingValue *float64, rat
 	return (v/(v+m))*R + (m/(v+m))*C
 }
 
-// ComputeWeightedRatingExported exports the weighted rating computation for testing.
+// ComputeWeightedRating exposes the weighted rating computation for testing.
 func ComputeWeightedRating(ratingValue *float64, ratingCount *int, globalMean, bayesianM float64) float64 {
 	if ratingValue == nil || ratingCount == nil {
 		return globalMean
 	}
+
 	v := float64(*ratingCount)
 	R := *ratingValue
 	m := bayesianM
 	C := globalMean
+
 	return (v/(v+m))*R + (m/(v+m))*C
 }
 
@@ -247,23 +267,30 @@ func brandCapOrder(brands []string, maxPerBrand int) []int {
 		for i := range brands {
 			out[i] = i
 		}
+
 		return out
 	}
+
 	head := make([]int, 0, len(brands))
 	tail := make([]int, 0)
+
 	counts := make(map[string]int, len(brands))
 	for i, b := range brands {
 		if b == "" {
 			head = append(head, i)
 			continue
 		}
+
 		if counts[b] >= maxPerBrand {
 			tail = append(tail, i)
 			continue
 		}
+
 		counts[b]++
+
 		head = append(head, i)
 	}
+
 	return append(head, tail...)
 }
 
@@ -280,15 +307,19 @@ func applyBrandCap(scored []scoredCandidate, maxPerBrand int) []scoredCandidate 
 	if maxPerBrand <= 0 || len(scored) == 0 {
 		return scored
 	}
+
 	brands := make([]string, len(scored))
 	for i, c := range scored {
 		brands[i] = c.perfume.Brand
 	}
+
 	order := brandCapOrder(brands, maxPerBrand)
+
 	out := make([]scoredCandidate, len(scored))
 	for i, idx := range order {
 		out[i] = scored[idx]
 	}
+
 	return out
 }
 
@@ -325,7 +356,11 @@ func (uc *RecommendationUseCase) applyExploration(scored []scoredCandidate, limi
 }
 
 // getColdStartCandidates returns popular perfumes for users without interaction history.
-func (uc *RecommendationUseCase) getColdStartCandidates(ctx context.Context, limit int, excludeIDs []int64) ([]domain.PerfumeWithEmbedding, error) {
+func (uc *RecommendationUseCase) getColdStartCandidates(
+	ctx context.Context,
+	limit int,
+	excludeIDs []int64,
+) ([]domain.PerfumeWithEmbedding, error) {
 	// For cold start, we'll use a zero vector to get diverse results
 	// or ideally get top-rated perfumes
 	zeroEmb := make([]float32, uc.embeddingDim)
