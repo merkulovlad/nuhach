@@ -7,6 +7,7 @@ Telegram bot for perfume recommendations powered by hybrid search (BM25 + embedd
 - **Hybrid Search**: Combines OpenSearch BM25 with pgvector semantic search (multilingual-e5-base embeddings)
 - **Personalized Recommendations**: Bayesian weighted ratings + epsilon-greedy exploration
 - **Similar Perfumes**: Item-to-item similarity using rec_embedding (paraphrase-multilingual-mpnet)
+- **Agentic Offer Search**: On-demand price and availability search across supported stores using direct adapters and an OpenRouter web-search fallback, with normalized results cached in PostgreSQL
 - **User Tracking**: Impressions, clicks, likes, dislikes, saves
 - **24,063 Perfumes** with Russian translations for notes/accords
 
